@@ -29,11 +29,18 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdministratorRole",
+         policy => policy.RequireRole("admin"));
+});
 
 var app = builder.Build();
 
@@ -43,6 +50,32 @@ var pendingMigrations = context.Database.GetPendingMigrations();
 if (pendingMigrations != null && pendingMigrations.Any())
 {
     context.Database.Migrate();
+}
+
+var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+var userStore = scope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();
+if (!userManager.Users.Any())
+{
+    // Create a new admin user
+    var email = Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? "admin@gmail.com";
+    var password = Environment.GetEnvironmentVariable("ADMIN_PASS") ?? "adminPass123!!";
+    var user = Activator.CreateInstance<ApplicationUser>();
+
+    await userStore.SetUserNameAsync(user, email, CancellationToken.None);
+    var emailStore = (IUserEmailStore<ApplicationUser>)userStore;
+    await emailStore.SetEmailAsync(user, email, CancellationToken.None);
+
+    user.EmailConfirmed = true;
+
+    var result = await userManager.CreateAsync(user, password);
+
+    if (!result.Succeeded)
+    {
+        var errors = result.Errors;
+        throw new Exception($"Unable to create admin user with email: {email} with error: {errors}");
+    }
+
+    await userManager.AddToRoleAsync(user, "admin");
 }
 
 // Configure the HTTP request pipeline.

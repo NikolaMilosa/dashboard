@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @using System.Text
 @using System.Text.Encodings.Web
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using dashboard.Data
@@ -14,6 +15,8 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+
+@attribute [Authorize(Policy = "RequireAdministratorRole")]
 
 <PageTitle>Register</PageTitle>
 
@@ -71,6 +74,17 @@
         {
             identityErrors = result.Errors;
             return;
+        }
+
+        var admins = await UserManager.GetUsersInRoleAsync("admin");
+        if (admins != null && !admins.Any()) {
+            Logger.LogInformation("No admins found. Settings this user as admin with email: {0}", user.Email);
+            var maybeAdded = await UserManager.AddToRoleAsync(user, "admin");
+
+            if (!maybeAdded.Succeeded) {
+                identityErrors = maybeAdded.Errors;
+                return;
+            }
         }
 
         Logger.LogInformation("User created a new account with password.");
