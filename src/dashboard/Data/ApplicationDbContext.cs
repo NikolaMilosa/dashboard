@@ -12,7 +12,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        builder.Entity<IdentityRole>().HasData(new IdentityRole[] { new IdentityRole { Name = "admin", NormalizedName = "ADMIN" } });
+        builder.Entity<IdentityRole>().HasData(new IdentityRole[] { new IdentityRole { Id = "533f6146-68ea-4332-8278-7b33cd95dc00", Name = "admin", NormalizedName = "ADMIN" } });
         base.OnModelCreating(builder);
     }
 }
