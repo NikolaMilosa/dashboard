@@ -46,11 +46,7 @@ var app = builder.Build();
 
 var scope = app.Services.CreateScope();
 var context = scope.ServiceProvider.GetService<ApplicationDbContext>()!;
-var pendingMigrations = context.Database.GetPendingMigrations();
-if (pendingMigrations != null && pendingMigrations.Any())
-{
-    context.Database.Migrate();
-}
+context.Database.Migrate();
 
 var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 var userStore = scope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();

@@ -9,6 +9,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Country> Countries { get; set; }
     public DbSet<Store> Stores { get; set; }
     public DbSet<Person> People { get; set; }
+    public DbSet<Log> EventLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
