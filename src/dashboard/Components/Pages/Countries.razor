@@ -1,0 +1,84 @@
+@page "/countries"
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Components.Account.Shared
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext dbContext;
+@inject IdentityRedirectManager redirectManager;
+
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+
+<PageTitle>Countries</PageTitle>
+<h1>Countries</h1>
+@if (!Loaded) {
+    <p>Fetching countries...</p>
+} else if (AllCountries.Count == 0) {
+    <p>There are no countries at the moment</p>
+    <p>You should add some!</p>
+} else {
+    <p>Currently there are following countries: <br/> @(string.Join(", ", AllCountries.Select(x => x.Name)))</p>
+}
+
+<div class="row">
+    <div class="col-md-4">
+        <section>
+            <StatusMessage Message="@errorMessage" />
+            <EditForm Model="Input" method="post" OnValidSubmit="CreateCountry" FormName="login">
+                <DataAnnotationsValidator />
+                <hr />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Name" class="form-control" autocomplete="name" aria-required="true" placeholder="SomeCountry" />
+                    <label for="name" class="form-label">Name</label>
+                    <ValidationMessage For="() => Input.Name" class="text-danger" />
+                </div>
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Add country</button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code {
+    private List<Country> AllCountries = new();
+    private bool Loaded = false;
+    private string? errorMessage;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.ToListAsync();
+        Loaded = true;
+    }
+
+    public async Task CreateCountry() {
+        var existingCountry = AllCountries.Find(x => x.Name.ToLower() == Input.Name.ToLower());
+
+        if (existingCountry != null) {
+            errorMessage = $"Country with name {Input.Name} already exists";
+            return;
+        }
+
+        var country = new Country() {
+            Name = Input.Name
+        };
+
+        await dbContext.Countries.AddAsync(country);
+        await dbContext.SaveChangesAsync();
+        redirectManager.RedirectToCurrentPage();
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        public string Name { get; set; } = "";
+    }
+}    
+
