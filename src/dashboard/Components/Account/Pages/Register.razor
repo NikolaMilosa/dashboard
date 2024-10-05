@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.EntityFrameworkCore
 @using dashboard.Data
 
 @inject UserManager<ApplicationUser> UserManager
@@ -15,8 +16,10 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject RoleManager<IdentityRole> RoleManager
 
 @attribute [Authorize(Policy = "RequireAdministratorRole")]
+@attribute [StreamRendering]
 
 <PageTitle>Register</PageTitle>
 
@@ -45,6 +48,19 @@
                 <label for="confirm-password">Confirm Password</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
+            @if (Roles == null || Roles.Count == 0)
+            {
+                <p><em>Loading...</em></p>
+            } else {
+                <div class="form-floating mb-3">
+                    <InputSelect @bind-Value="Input.Role" class="form-control">
+                        @foreach (var role in Roles) {
+                            <option value="@role">@role</option>
+                        }
+                    </InputSelect>
+                <label for="role">Role</label>
+            </div>
+            }
             <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
         </EditForm>
     </div>
@@ -61,6 +77,8 @@
 
     private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
 
+    private List<string> Roles = new();
+
     public async Task RegisterUser(EditContext editContext)
     {
         var user = CreateUser();
@@ -76,13 +94,11 @@
             return;
         }
 
-        var admins = await UserManager.GetUsersInRoleAsync("admin");
-        if (admins != null && !admins.Any()) {
-            Logger.LogInformation("No admins found. Settings this user as admin with email: {0}", user.Email);
-            var maybeAdded = await UserManager.AddToRoleAsync(user, "admin");
-
-            if (!maybeAdded.Succeeded) {
-                identityErrors = maybeAdded.Errors;
+        if (Input.Role != "user") {
+            var roleResult = await UserManager.AddToRoleAsync(user, Input.Role);
+            if (!roleResult.Succeeded) {
+                identityErrors = roleResult.Errors;
+                await UserManager.DeleteAsync(user);
                 return;
             }
         }
@@ -107,6 +123,12 @@
 
         await SignInManager.SignInAsync(user, isPersistent: false);
         RedirectManager.RedirectTo(ReturnUrl);
+    }
+
+    protected override async Task OnInitializedAsync() {
+        var roles = await RoleManager.Roles.ToListAsync();
+        Roles = roles.Select(x => x.Name!).ToList();
+        Roles.Add("user");
     }
 
     private ApplicationUser CreateUser()
@@ -148,5 +170,8 @@
         [Display(Name = "Confirm password")]
         [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
         public string ConfirmPassword { get; set; } = "";
+
+        [Display(Name = "Role")]
+        public string Role { get; set; } = "user";
     }
 }
