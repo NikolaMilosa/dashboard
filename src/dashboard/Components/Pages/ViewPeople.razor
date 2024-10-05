@@ -1,0 +1,117 @@
+@page "/viewPeople"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Components.Account.Shared
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext dbContext;
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+<PageTitle>View people</PageTitle>
+<h1>View People</h1>
+
+
+<div class="row">
+    <div class="col-md-4">
+        <section>
+                @if (!Loaded) {
+                    <p>Loading country and store data...</p>
+                } else {
+                    <div class="form-floating mb-3">
+                        <InputSelect 
+                        TValue="Guid"
+                        Value="@CountryId"
+                        ValueChanged="CountryValueChanged"
+                        ValueExpression="@(() => CountryId)"
+                        class="form-control" aria-required="true" >
+                            <option value="@Guid.Empty">Select country</option>
+                            @foreach(var country in AllCountries) {
+                                <option value="@country.Id">@country.Name</option>
+                            }
+                        </InputSelect>
+                        <label for="country" class="form-label">Country</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputSelect
+                        TValue="Guid"
+                        Value="@StoreId"
+                        ValueChanged="StoreValueChanged"
+                        ValueExpression="@(() => StoreId)"
+                         class="form-control" >
+                            @if(CountryId != Guid.Empty) {
+                                <option value="@Guid.Empty">Select Store</option>
+                                @foreach(var store in AllCountries.First(x => x.Id == CountryId).Stores) {
+                                    <option value="@store.Id">@store.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <label for="store" class="form-label">Store</label>
+                    </div>
+                }
+        </section>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-8">
+        @if (CountryId == Guid.Empty || StoreId == Guid.Empty) {
+            <p>Awaiting to select both country and store...</p>
+        } else {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>First name</th>
+                        <th>Last name</th>
+                        <th>View arrivals</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach(var person in People) {
+                        <tr>
+                            <td>@person.Id</td>
+                            <td>@person.FirstName</td>
+                            <td>@person.LastName</td>
+                            <td><a href="/arrivals">Arrivals</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Country> AllCountries = new();
+    private bool Loaded = false;
+    private Guid CountryId = Guid.Empty;
+    private Guid StoreId = Guid.Empty;
+    private List<Person> People = new();
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
+        Loaded = true;
+    }
+
+    private async Task CountryValueChanged(Guid newCountry) {
+        CountryId = newCountry;
+        await OnChange();
+    }
+
+    private async Task StoreValueChanged(Guid newStore) {
+        StoreId = newStore;
+        await OnChange();
+    }
+
+    private async Task OnChange() {
+        People = new();
+        if (CountryId == Guid.Empty || StoreId == Guid.Empty) {
+            return;
+        }
+
+        People = await dbContext.People.Include(x => x.Store).Where(x => x.Store.Id == StoreId).ToListAsync();
+    }
+}
