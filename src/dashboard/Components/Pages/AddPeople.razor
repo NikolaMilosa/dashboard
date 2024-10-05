@@ -39,7 +39,13 @@
                     <p>Loading country and store data...</p>
                 } else {
                     <div class="form-floating mb-3">
-                        <InputSelect @bind-Value="Input.CountryId" class="form-control" aria-required="true" >
+                        <InputSelect 
+                        TValue="Guid"
+                        Value="Input.CountryId"
+                        ValueChanged="OnCountryChange"
+                        ValueExpression="@(() => Input.CountryId)"
+                        
+                        class="form-control" aria-required="true" >
                             <option value="@Guid.Empty">Select country</option>
                             @foreach(var country in AllCountries) {
                                 <option value="@country.Id">@country.Name</option>
@@ -80,6 +86,11 @@
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
         Loaded = true;
+    }
+
+    private void OnCountryChange(Guid newCountryId){
+        Input.CountryId = newCountryId;
+        Input.StoreId = Guid.Empty;
     }
 
     private async Task AddPerson() {

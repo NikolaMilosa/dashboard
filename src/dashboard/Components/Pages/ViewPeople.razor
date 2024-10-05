@@ -98,7 +98,7 @@
 
     private async Task CountryValueChanged(Guid newCountry) {
         CountryId = newCountry;
-        await OnChange();
+        StoreId = Guid.Empty;
     }
 
     private async Task StoreValueChanged(Guid newStore) {
