@@ -1,0 +1,110 @@
+@page "/stores"
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Components.Account.Shared
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext dbContext;
+@inject IdentityRedirectManager redirectManager;
+
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+
+<PageTitle>Stores</PageTitle>
+<h1>Stores</h1>
+@if(!Loaded) {
+    <p>Fetching stores...</p>
+} else if (AllCountries.Count == 0) {
+    <p>There are no countres at the moment so you won't be able to create any stores.</p>
+    <a href="/countries">Click here to add some countreis</a>
+} else if (AllStores.Count == 0) {
+    <p>There are no stores at the moment</p>
+    <p>You should add some!</p>
+} else {
+    <p>Currently there are following stores: <br />
+    @(string.Join(", ", AllStores.Select(x => $"{x.Name} ({x.Country.Name})")))
+    </p>
+}
+
+<div class="row">
+    <div class="col-md-4">
+        <section>
+            <StatusMessage Message="@errorMessage" />
+            <EditForm Model="Input" method="post" OnValidSubmit="CreateStore" FormName="login">
+                <DataAnnotationsValidator />
+                <hr />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Name" class="form-control" autocomplete="name" aria-required="true" placeholder="Store name" />
+                    <label for="name" class="form-label">Name</label>
+                    <ValidationMessage For="() => Input.Name" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    @if(!Loaded) {
+                        <p><em>Loading...</em></p>
+                    } else {
+                        <InputSelect @bind-Value="Input.CountryId" class="form-control" aria-required="true"> 
+                            @foreach(var country in AllCountries) {
+                                <option value="@country.Id">@country.Name</option>
+                            }
+                        </InputSelect>
+                        <label for="country" class="form-label">Country</label>
+                    }
+                </div>
+
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Add country</button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code {
+    private bool Loaded = false;
+    private List<Store> AllStores = new();
+    private List<Country> AllCountries = new();
+    private string? errorMessage;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
+        AllStores = await dbContext.Stores.Include(x => x.Country).ToListAsync();
+        Loaded = true;
+    }
+
+    public async Task CreateStore() {
+        var country = AllCountries.First(x => x.Id == Input.CountryId);
+        var sameStore = country.Stores.FirstOrDefault(x => x.Name.ToLower() == Input.Name.ToLower());
+
+        if (sameStore != null) {
+            errorMessage = "Store with that name in that country already exists";
+            return;
+        }
+
+        var store = new Store() {
+            Name = Input.Name,
+            Country = country
+        };
+
+        await dbContext.Stores.AddAsync(store);
+        await dbContext.SaveChangesAsync();
+        redirectManager.RedirectToCurrentPage();
+    }
+
+
+    private sealed class InputModel
+    {
+        [Required]
+        public string Name { get; set; } = "";
+        
+        [Required]
+        public Guid CountryId {get; set;} = Guid.Empty;
+    }
+}
