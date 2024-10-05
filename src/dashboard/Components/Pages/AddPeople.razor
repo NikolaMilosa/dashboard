@@ -1,0 +1,124 @@
+@page "/addPeople"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Components.Account.Shared
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+@using static dashboard.Components.Shared.StatusMessageWithTypes
+
+@inject ApplicationDbContext dbContext;
+@inject NavigationManager navManager;
+
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+
+<PageTitle>Add people</PageTitle>
+<h1>Add peple</h1>
+
+
+<div class="row">
+    <div class="col-md-4">
+        <section>
+            <dashboard.Components.Shared.StatusMessageWithTypes Message="@status" MessageType="@statusType"/>
+            <EditForm Model="Input" method="post" OnValidSubmit="AddPerson" FormName="addPerson">
+                <hr />
+                <ValidationSummary class="text-danger" role="alert" />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.FirstName" class="form-control" aria-required="true" placeholder="John" />
+                    <label for="firstName" class="form-label">FirstName</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.LastName" class="form-control" aria-required="true" placeholder="Doe" />
+                    <label for="lastName" class="form-label">LastName</label>
+                </div>
+
+                @if (!Loaded) {
+                    <p>Loading country and store data...</p>
+                } else {
+                    <div class="form-floating mb-3">
+                        <InputSelect @bind-Value="Input.CountryId" class="form-control" aria-required="true" >
+                            <option value="@Guid.Empty">Select country</option>
+                            @foreach(var country in AllCountries) {
+                                <option value="@country.Id">@country.Name</option>
+                            }
+                        </InputSelect>
+                        <label for="country" class="form-label">Country</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputSelect @bind-Value="Input.StoreId" class="form-control" >
+                            @if(Input.CountryId != Guid.Empty) {
+                                <option value="@Guid.Empty">Select Store</option>
+                                @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
+                                    <option value="@store.Id">@store.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <label for="store" class="form-label">Store</label>
+                    </div>
+                }
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Add Person</button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code{
+    private List<Country> AllCountries = new();
+    private bool Loaded = false;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    private string? status = "";
+    private StatusType statusType = StatusType.Success;
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
+        Loaded = true;
+    }
+
+    private async Task AddPerson() {
+        var country = AllCountries.FirstOrDefault(x => x.Id == Input.CountryId);
+        if (country == null) {
+            status = "Invalid country selected!";
+            statusType = StatusType.Error;
+            return;
+        }
+        var store = country.Stores.FirstOrDefault(x => x.Id == Input.StoreId);
+        if (store == null) {
+            status = "Invalid store selected!";
+            statusType = StatusType.Error;
+            return;
+        }
+
+        var person = new Person {
+            FirstName = Input.FirstName,
+            LastName = Input.LastName,
+            Store = store
+        };
+
+        await dbContext.People.AddAsync(person);
+        await dbContext.SaveChangesAsync();
+
+        navManager.Refresh(true);
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        public string FirstName { get; set; } = "";
+        [Required]
+        public string LastName { get; set; } = "";
+
+        [Required]
+        public Guid CountryId { get; set; } = Guid.Empty;
+
+        [Required]
+        public Guid StoreId { get; set; } = Guid.Empty;
+    }
+}

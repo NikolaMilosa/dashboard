@@ -1,0 +1,27 @@
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="alert alert-@ToClass()" role="alert">
+        @Message
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public StatusType MessageType {get; set; }
+
+    public enum StatusType {
+        Success,
+        Error
+    }
+
+    public string ToClass() => (MessageType) switch
+    {
+        StatusType.Success => "success",
+        StatusType.Error => "danger"
+    };
+
+}
