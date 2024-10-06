@@ -1,0 +1,176 @@
+@page "/noteLog"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using System.Text
+@using dashboard.Components.Account
+@using dashboard.Components.Account.Shared
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+@using static dashboard.Components.Shared.StatusMessageWithTypes
+
+@inject ApplicationDbContext dbContext;
+
+@attribute [Authorize]
+@attribute [StreamRendering]
+
+<PageTitle>Note Log</PageTitle>
+<h1>Note Log</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <dashboard.Components.Shared.StatusMessageWithTypes Message="@status" MessageType="@statusType"/>
+        <EditForm Model="Input" method="post" OnValidSubmit="MakeNoteLog" FormName="noteLog">
+                <ValidationSummary class="text-danger" role="alert" />
+                @if(!Loaded) {
+                    <p>Loading data for countries...</p>
+                } else {
+                    <div class="form-floating mb-3">
+                        <InputSelect 
+                        TValue="Guid"
+                        Value="Input.CountryId"
+                        ValueChanged="OnCountryChange"
+                        ValueExpression="@(() => Input.CountryId)"
+                        
+                        class="form-control" aria-required="true" >
+                            <option value="@Guid.Empty">Select country</option>
+                            @foreach(var country in AllCountries) {
+                                <option value="@country.Id">@country.Name</option>
+                            }
+                        </InputSelect>
+                        <label for="country" class="form-label">Country</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputSelect class="form-control" 
+                        TValue="Guid"
+                        Value="Input.StoreId"
+                        ValueChanged="OnStoreChange"
+                        ValueExpression="@(() => Input.StoreId)"
+                        >
+                            @if(Input.CountryId != Guid.Empty) {
+                                <option value="@Guid.Empty">Select Store</option>
+                                @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
+                                    <option value="@store.Id">@store.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <label for="store" class="form-label">Store</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputSelect class="form-control" 
+                        @bind-Value="Input.UserId"
+                        >
+                            @if(Input.CountryId != Guid.Empty && Input.StoreId != Guid.Empty) {
+                                <option value="@Guid.Empty">Select User</option>
+                                @foreach(var person in AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People) {
+                                    <option value="@person.Id">@person.FirstName @person.LastName</option>
+                                }
+                            }
+                        </InputSelect>
+                        <label for="user" class="form-label">User</label>
+                    </div>
+                }
+                <div class="form-floating mb-3">
+                    <InputSelect @bind-Value="Input.LogType" class="form-control" >
+                        @foreach(var option in Enum.GetValues<LogType>()) {
+                            <option value="@option">@option.GetDisplayName()</option>
+                        }
+                    </InputSelect>
+                    <label for="log" class="form-label">Log Type</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <InputTextArea DisplayName="Description"  class="form-control" @bind-Value="Input.Description" />
+                    <label for="description" class="form-label">Description</label>
+                </div>
+
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log</button>
+                </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+
+    private string? status = "";
+    private StatusType statusType = StatusType.Success;
+    
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    private bool Loaded = false;
+    private List<Country> AllCountries = new();
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
+        Loaded = true;
+    }
+    
+    private void OnCountryChange(Guid newCountryGuid) {
+        Input.CountryId = newCountryGuid;
+        OnStoreChange(Guid.Empty);
+    }
+    
+    private void OnStoreChange(Guid newStoreId) {
+        Input.StoreId = newStoreId;
+        Input.UserId = Guid.Empty;
+    }
+
+    private async Task MakeNoteLog() {
+        var errorStringBuilder = new StringBuilder();
+        if (Input.CountryId == Guid.Empty) {
+            errorStringBuilder.Append("Country is required!");
+        }
+
+        if (Input.StoreId == Guid.Empty) {
+            if (errorStringBuilder.Length != 0) {
+                errorStringBuilder.AppendLine();
+            }
+            errorStringBuilder.Append("Store is required!");
+        }
+
+        if (Input.UserId == Guid.Empty) {
+            if (errorStringBuilder.Length != 0){
+                errorStringBuilder.AppendLine();
+            }
+
+            errorStringBuilder.Append("User is required!");
+        }
+
+        if (errorStringBuilder.Length != 0){
+            status = errorStringBuilder.ToString();
+            statusType = StatusType.Error;
+            return;
+        }
+
+        var log = new Log {
+            Description = Input.Description,
+            LogType = Input.LogType,
+            Person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId)
+        };
+        await dbContext.EventLogs.AddAsync(log);
+        await dbContext.SaveChangesAsync();
+
+        Loaded = false;
+        Input = new();
+        await OnInitializedAsync();
+
+        status = $"Successfully logged {log.LogType.GetDisplayName()} for {log.Person.FirstName} {log.Person.LastName}";
+        statusType = StatusType.Success;
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        public Guid CountryId { get; set; } = Guid.Empty;
+
+        [Required]
+        public Guid StoreId { get; set; } = Guid.Empty;
+        [Required]
+        public Guid UserId { get; set; } = Guid.Empty;
+
+        public LogType LogType { get; set; } = LogType.CheckIn;
+        public string Description { get; set; } = "";
+    }
+}
