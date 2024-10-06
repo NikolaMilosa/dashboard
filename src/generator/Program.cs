@@ -31,7 +31,7 @@ async Task Main(
 
     var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(connectionString);
     var dbContext = new ApplicationDbContext(options.Options);
-    await dbContext.Database.CanConnectAsync();
+    await dbContext.Database.MigrateAsync();
     logger.LogInformation("Connected to database");
 
     var countryEntity = await GetOrCreateCountry(dbContext, country, logger);
@@ -41,7 +41,7 @@ async Task Main(
     var beginning = DateTime.Parse(beginningDate);
     var ending = DateTime.Parse(endingDate);
     logger.LogInformation("Will generated data from {0} to {1}", beginning.ToString("yyyy-MM-dd"), ending.ToString("yyyy-MM-dd"));
-    await FillWithRandomLogs(dbContext, logger, personEntity, beginning.Date.ToUniversalTime(), ending.Date.ToUniversalTime());
+    await FillWithRandomLogs(dbContext, logger, personEntity, beginning.Date, ending.Date);
     logger.LogInformation("Done");
 }
 
@@ -98,17 +98,30 @@ async Task<Person> GetOrCreatePerson(ApplicationDbContext dbContext, Store store
 async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Person person, DateTime beginning, DateTime ending) {
     var random = new Random();
     while (beginning < ending) {
-        var probabilityToComeToWork = random.NextDouble();
-        if (probabilityToComeToWork < 0.2) {
+        if (beginning.DayOfWeek == DayOfWeek.Sunday) {
             // 20% of time person will not come to work
             beginning = beginning.AddDays(1);
             continue;
         }
 
-        var logType = (LogType)random.Next(0, 5);
-        
+        LogType logType;
+        switch(random.NextDouble() * 100) {
+            case double n when n < 10:
+                logType = LogType.UnpaidLeave;
+                break;
+            case double n when n < 20:
+                logType = LogType.SickLeave;
+                break;
+            case double n when n < 90:
+                logType = LogType.CheckIn;
+                break;
+            default:
+                logType = LogType.Vacation;
+                break;
+        }
+        logger.LogInformation("For {0} will generate {1}", beginning.ToString("yyyy-MM-dd"), logType);
+
         switch (logType) {
-            case LogType.CheckOut:
             case LogType.CheckIn:
                 var checkedInHours = random.NextDouble() * (10 - 7) + 7;
                 var checkedIn = beginning.AddHours(checkedInHours);
@@ -116,7 +129,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Description = "Generated check in",
                     LogType = LogType.CheckIn,
                     Person = person,
-                    Timestamp = checkedIn
+                    Timestamp = checkedIn.ToUniversalTime()
                 };
 
                 var checkedOutHours = random.NextDouble() * (18 - 15) + 15;
@@ -125,7 +138,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Description = "Generated check out",
                     LogType = LogType.CheckOut,
                     Person = person,
-                    Timestamp = checkedOut
+                    Timestamp = checkedOut.ToUniversalTime()
                 };
                 await dbContext.EventLogs.AddAsync(checkInLog);
                 await dbContext.EventLogs.AddAsync(checkOutLog);
@@ -135,7 +148,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Description = "Generated sick leave",
                     LogType = LogType.SickLeave,
                     Person = person,
-                    Timestamp = beginning.AddHours(8)
+                    Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
                 
                 await dbContext.EventLogs.AddAsync(sickLeaveLog);
@@ -145,7 +158,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Description = "Generated unpaid leave",
                     LogType = LogType.UnpaidLeave,
                     Person = person,
-                    Timestamp = beginning.AddHours(8)
+                    Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
                 
                 await dbContext.EventLogs.AddAsync(unpaidLeaveLog);
@@ -155,7 +168,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Description = "Generated vacation",
                     LogType = LogType.Vacation,
                     Person = person,
-                    Timestamp = beginning.AddHours(8)
+                    Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
                 
                 await dbContext.EventLogs.AddAsync(vacationLog);

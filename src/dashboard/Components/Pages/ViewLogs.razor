@@ -162,7 +162,7 @@
     private DateTime ObservedDate = DateTime.Now.Date;
     private string MonthAndYear => ObservedDate.ToString("MMMM, yyyy");
 
-    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1).ToUniversalTime();
+    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1);
     private DateTime LastDay => FirstDay.AddMonths(1);
     private List<SingleDateEntry> Calendar = new();
 
@@ -210,7 +210,7 @@
             return;
         }
 
-        var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && FirstDay <= x.Timestamp && x.Timestamp < LastDay).ToListAsync();
+        var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && FirstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < LastDay.ToUniversalTime()).ToListAsync();
         foreach (var day in Calendar) {
             day.EventLogs = eventLogsForMonth.Where(x => day.Date.Date == x.Timestamp.Date).OrderBy(x => x.Timestamp).ToList();
         }
