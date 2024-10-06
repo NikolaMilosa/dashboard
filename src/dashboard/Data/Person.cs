@@ -1,6 +1,7 @@
 namespace dashboard.Data;
 
-public class Person {
+public class Person
+{
     public Guid Id { get; set; }
 
     public string FirstName { get; set; }

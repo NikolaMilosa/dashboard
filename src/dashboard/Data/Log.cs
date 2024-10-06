@@ -1,6 +1,7 @@
 namespace dashboard.Data;
 
-public class Log {
+public class Log
+{
     public Guid Id { get; set; }
     public LogType LogType { get; set; }
     public DateTime Timestamp { get; set; }
@@ -8,7 +9,8 @@ public class Log {
     public Person Person { get; set; }
 }
 
-public enum LogType {
+public enum LogType
+{
     CheckIn,
     CheckOut,
     SickLeave,
@@ -16,7 +18,8 @@ public enum LogType {
     Vacation,
 }
 
-public static class LogTypeExtensions {
+public static class LogTypeExtensions
+{
     public static string GetDisplayName(this LogType logType) => logType switch
     {
         LogType.CheckIn => "Check In",

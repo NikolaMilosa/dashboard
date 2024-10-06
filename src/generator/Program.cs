@@ -14,8 +14,10 @@ async Task Main(
     string? connectionString,
     string beginningDate,
     string endingDate
-) {
-    var loggerFactory = LoggerFactory.Create(options => {
+)
+{
+    var loggerFactory = LoggerFactory.Create(options =>
+    {
         options.AddSimpleConsole(opts => opts.TimestampFormat = "O");
         options.SetMinimumLevel(LogLevel.Information);
     });
@@ -26,7 +28,7 @@ async Task Main(
     var store = storeName ?? "Generated store";
     var person = personName ?? "Generated";
     var lastName = personLastName ?? "Generated";
-   
+
     logger.LogInformation("Starting generator with following parameters: {0}, {1}, {2}, {3}", country, store, person, lastName);
 
     var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(connectionString);
@@ -45,13 +47,16 @@ async Task Main(
     logger.LogInformation("Done");
 }
 
-async Task<Country> GetOrCreateCountry(ApplicationDbContext dbContext, string countryName, ILogger logger) {
+async Task<Country> GetOrCreateCountry(ApplicationDbContext dbContext, string countryName, ILogger logger)
+{
     var maybeCountry = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).FirstOrDefaultAsync(x => x.Name == countryName);
-    if (maybeCountry != null) {
+    if (maybeCountry != null)
+    {
         logger.LogInformation("Country {0} already exists", countryName);
         return maybeCountry;
     }
-    var newCountry = new Country() {
+    var newCountry = new Country()
+    {
         Name = countryName,
         Stores = new List<Store>()
     };
@@ -61,13 +66,16 @@ async Task<Country> GetOrCreateCountry(ApplicationDbContext dbContext, string co
     return newCountry;
 }
 
-async Task<Store> GetOrCreateStore(ApplicationDbContext dbContext, Country country, string storeName, ILogger logger) {
+async Task<Store> GetOrCreateStore(ApplicationDbContext dbContext, Country country, string storeName, ILogger logger)
+{
     var maybeStore = country.Stores.FirstOrDefault(x => x.Name == storeName);
-    if (maybeStore != null) {
+    if (maybeStore != null)
+    {
         logger.LogInformation("Store {0} already exists", storeName);
         return maybeStore;
     }
-    var newStore = new Store() {
+    var newStore = new Store()
+    {
         Name = storeName,
         Country = country,
         People = new List<Person>()
@@ -78,13 +86,16 @@ async Task<Store> GetOrCreateStore(ApplicationDbContext dbContext, Country count
     return newStore;
 }
 
-async Task<Person> GetOrCreatePerson(ApplicationDbContext dbContext, Store store, string personName, string personLastName, ILogger logger) {
+async Task<Person> GetOrCreatePerson(ApplicationDbContext dbContext, Store store, string personName, string personLastName, ILogger logger)
+{
     var maybePerson = store.People.FirstOrDefault(x => x.FirstName == personName && x.LastName == personLastName);
-    if (maybePerson != null) {
+    if (maybePerson != null)
+    {
         logger.LogInformation("Person {0} {1} already exists", personName, personLastName);
         return maybePerson;
     }
-    var newPerson = new Person() {
+    var newPerson = new Person()
+    {
         FirstName = personName,
         LastName = personLastName,
         Store = store,
@@ -95,17 +106,21 @@ async Task<Person> GetOrCreatePerson(ApplicationDbContext dbContext, Store store
     return newPerson;
 }
 
-async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Person person, DateTime beginning, DateTime ending) {
+async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Person person, DateTime beginning, DateTime ending)
+{
     var random = new Random();
-    while (beginning < ending) {
-        if (beginning.DayOfWeek == DayOfWeek.Sunday) {
+    while (beginning < ending)
+    {
+        if (beginning.DayOfWeek == DayOfWeek.Sunday)
+        {
             // 20% of time person will not come to work
             beginning = beginning.AddDays(1);
             continue;
         }
 
         LogType logType;
-        switch(random.NextDouble() * 100) {
+        switch (random.NextDouble() * 100)
+        {
             case double n when n < 10:
                 logType = LogType.UnpaidLeave;
                 break;
@@ -121,11 +136,13 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
         }
         logger.LogInformation("For {0} will generate {1}", beginning.ToString("yyyy-MM-dd"), logType);
 
-        switch (logType) {
+        switch (logType)
+        {
             case LogType.CheckIn:
                 var checkedInHours = random.NextDouble() * (10 - 7) + 7;
                 var checkedIn = beginning.AddHours(checkedInHours);
-                var checkInLog = new Log {
+                var checkInLog = new Log
+                {
                     Description = "Generated check in",
                     LogType = LogType.CheckIn,
                     Person = person,
@@ -134,7 +151,8 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
 
                 var checkedOutHours = random.NextDouble() * (18 - 15) + 15;
                 var checkedOut = beginning.AddHours(checkedOutHours);
-                var checkOutLog = new Log {
+                var checkOutLog = new Log
+                {
                     Description = "Generated check out",
                     LogType = LogType.CheckOut,
                     Person = person,
@@ -144,33 +162,36 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                 await dbContext.EventLogs.AddAsync(checkOutLog);
                 break;
             case LogType.SickLeave:
-                var sickLeaveLog = new Log {
+                var sickLeaveLog = new Log
+                {
                     Description = "Generated sick leave",
                     LogType = LogType.SickLeave,
                     Person = person,
                     Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
-                
+
                 await dbContext.EventLogs.AddAsync(sickLeaveLog);
                 break;
             case LogType.UnpaidLeave:
-                var unpaidLeaveLog = new Log {
+                var unpaidLeaveLog = new Log
+                {
                     Description = "Generated unpaid leave",
                     LogType = LogType.UnpaidLeave,
                     Person = person,
                     Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
-                
+
                 await dbContext.EventLogs.AddAsync(unpaidLeaveLog);
                 break;
             case LogType.Vacation:
-                var vacationLog = new Log {
+                var vacationLog = new Log
+                {
                     Description = "Generated vacation",
                     LogType = LogType.Vacation,
                     Person = person,
                     Timestamp = beginning.AddHours(8).ToUniversalTime()
                 };
-                
+
                 await dbContext.EventLogs.AddAsync(vacationLog);
                 break;
         }
