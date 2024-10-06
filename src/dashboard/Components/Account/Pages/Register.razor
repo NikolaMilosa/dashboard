@@ -1,4 +1,5 @@
 ﻿@page "/Account/Register"
+@rendermode InteractiveServer
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -8,15 +9,17 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.EntityFrameworkCore
 @using dashboard.Data
+@using dashboard.Components.Shared
+@using static dashboard.Components.Shared.StatusMessageWithTypes
 
 @inject UserManager<ApplicationUser> UserManager
 @inject IUserStore<ApplicationUser> UserStore
-@inject SignInManager<ApplicationUser> SignInManager
 @inject IEmailSender<ApplicationUser> EmailSender
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 @inject RoleManager<IdentityRole> RoleManager
+@inject ApplicationDbContext dbContext
 
 @attribute [Authorize(Policy = "RequireAdministratorRole")]
 @attribute [StreamRendering]
@@ -27,7 +30,7 @@
 
 <div class="row">
     <div class="col-md-4">
-        <StatusMessage Message="@Message" />
+        <StatusMessageWithTypes Message="@status" MessageType="@statusType" />
         <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
             <h2>Create a new account.</h2>
@@ -61,6 +64,47 @@
                 <label for="role">Role</label>
             </div>
             }
+            @if (Input.Role == "user") {
+                <div class="form-floating mb-3">
+                        <InputSelect 
+                        TValue="Guid"
+                        Value="Input.CountryId"
+                        ValueChanged="OnCountryChange"
+                        ValueExpression="@(() => Input.CountryId)"
+                        
+                        class="form-control" aria-required="true" >
+                            <option value="@Guid.Empty">Select country</option>
+                            @foreach(var country in AllCountries) {
+                                <option value="@country.Id">@country.Name</option>
+                            }
+                        </InputSelect>
+                        <label for="country" class="form-label">Country</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputSelect class="form-control" 
+                        TValue="Guid"
+                        Value="Input.StoreId"
+                        ValueChanged="OnStoreChange"
+                        ValueExpression="@(() => Input.StoreId)"
+                        >
+                            @if(Input.CountryId != Guid.Empty) {
+                                <option value="@Guid.Empty">Select Store</option>
+                                @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
+                                    <option value="@store.Id">@store.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <label for="store" class="form-label">Store</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputText @bind-Value="Input.FirstName" class="form-control" aria-required="true" placeholder="John" />
+                        <label for="firstName">First Name</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputText @bind-Value="Input.LastName" class="form-control" aria-required="true" placeholder="Doe" />
+                        <label for="lastName">Last Name</label>
+                    </div>
+            }
             <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
         </EditForm>
     </div>
@@ -75,13 +119,47 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+    private string? status { get; set; } = "";
+    private StatusType statusType { get; set; } = StatusType.Success;
 
     private List<string> Roles = new();
+    private List<Country> AllCountries = new();
 
     public async Task RegisterUser(EditContext editContext)
     {
         var user = CreateUser();
+        var errors = new StringBuilder();
+
+        if (Input.Role == "user") {
+            if (Input.CountryId == Guid.Empty) {
+                errors.Append("Country is mandatory for non admin users!");
+            }
+
+            if (Input.StoreId == Guid.Empty) {
+                if (errors.Length != 0) {
+                    errors.AppendLine();
+                }
+                errors.Append("Store is mandatory for non admin users!");
+            }
+            if (Input.FirstName == string.Empty) {
+                if (errors.Length != 0) {
+                    errors.AppendLine();
+                }
+                errors.Append("First name is required for non admin users!");
+            }
+            if (Input.LastName == string.Empty) {
+                if (errors.Length != 0){
+                    errors.AppendLine();
+                }
+                errors.Append("Last name is required for non admin users!");
+            }
+        }
+
+        if (errors.Length != 0) {
+            status = errors.ToString();
+            statusType = StatusType.Error;
+            return;
+        }
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
@@ -91,6 +169,8 @@
         if (!result.Succeeded)
         {
             identityErrors = result.Errors;
+            status = string.Join(", ", identityErrors.Select(err => err.Description));
+            statusType = StatusType.Error;
             return;
         }
 
@@ -98,9 +178,22 @@
             var roleResult = await UserManager.AddToRoleAsync(user, Input.Role);
             if (!roleResult.Succeeded) {
                 identityErrors = roleResult.Errors;
+                status = string.Join(", ", identityErrors.Select(err => err.Description));
+                statusType = StatusType.Error;
                 await UserManager.DeleteAsync(user);
                 return;
             }
+        }
+
+        if (Input.Role == "user") {
+            var person = new Person {
+                FirstName = Input.FirstName,
+                LastName = Input.LastName,
+                Store = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId)
+            };
+
+            await dbContext.People.AddAsync(person);
+            await dbContext.SaveChangesAsync();
         }
 
         Logger.LogInformation("User created a new account with password.");
@@ -121,7 +214,6 @@
                 new() { ["email"] = Input.Email, ["returnUrl"] = ReturnUrl });
         }
 
-        await SignInManager.SignInAsync(user, isPersistent: false);
         RedirectManager.RedirectTo(ReturnUrl);
     }
 
@@ -129,6 +221,17 @@
         var roles = await RoleManager.Roles.ToListAsync();
         Roles = roles.Select(x => x.Name!).ToList();
         Roles.Add("user");
+
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
+    }
+
+    public void OnCountryChange(Guid newCountry) {
+        Input.CountryId = newCountry;
+        Input.StoreId = Guid.Empty;
+    }
+
+    public void OnStoreChange(Guid newStore) {
+        Input.StoreId = newStore;
     }
 
     private ApplicationUser CreateUser()
@@ -173,5 +276,12 @@
 
         [Display(Name = "Role")]
         public string Role { get; set; } = "user";
+
+        public Guid CountryId { get; set; } = Guid.Empty;
+
+        public Guid StoreId { get; set; } = Guid.Empty;
+        
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
     }
 }
