@@ -1,0 +1,189 @@
+@page "/viewLogs"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext dbContext;
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+
+<PageTitle>View Logs</PageTitle>
+
+<style>
+    .log-date {
+        height: 100px;
+        border: 1px solid #aea5a5;
+        border-radius: 5px;
+        margin-bottom: 5px;
+    }
+</style>
+
+<h1>View logs</h1>
+@if (!Loaded) {
+    <p>Loading countries...</p>
+} else {
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="form-floating mb-3">
+            <InputSelect 
+            TValue="Guid"
+            Value="@SelectedCountry"
+            ValueChanged="OnCountryChange"
+            ValueExpression="@(() => SelectedCountry)"
+            class="form-control" aria-required="true" >
+                <option value="@Guid.Empty">Select country</option>
+                @foreach(var country in AllCountries) {
+                    <option value="@country.Id">@country.Name</option>
+                }
+            </InputSelect>
+            <label for="country" class="form-label">Country</label>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="form-floating mb-3">
+            <InputSelect
+            TValue="Guid"
+            Value="@SelectedStore"
+            ValueChanged="OnStoreChange"
+            ValueExpression="@(() => SelectedStore)"
+            class="form-control" >
+                @if(SelectedCountry != Guid.Empty) {
+                    <option value="@Guid.Empty">Select Store</option>
+                    @foreach(var store in AllCountries.First(x => x.Id == SelectedCountry).Stores) {
+                        <option value="@store.Id">@store.Name</option>
+                    }
+                }
+            </InputSelect>
+            <label for="store" class="form-label">Store</label>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="form-floating mb-3">
+            <InputSelect
+            @bind-Value="SelectedPerson"
+            class="form-control" >
+                @if(SelectedCountry != Guid.Empty && SelectedStore != Guid.Empty) {
+                    <option value="@Guid.Empty">Select Person</option>
+                    @foreach(var person in AllCountries.First(x => x.Id == SelectedCountry).Stores.First(x => x.Id == SelectedStore).People) {
+                        <option value="@person.Id">@person.FirstName @person.LastName</option>
+                    }
+                }
+            </InputSelect>
+            <label for="store" class="form-label">Person</label>
+        </div>
+    </div>
+</div>
+<hr/>
+<div class="row">
+    <div class="col-md-12">
+        <div class="row">
+            <div class="col-md-4">
+                <h3>@MonthAndYear, @FirstDay.DayOfWeek</h3>
+            </div>
+        </div>
+        <hr/>
+        <table class="table">
+            <thead>
+                <th class="col-1" scope="col">Sunday</th>
+                <th class="col-1" scope="col">Monday</th>
+                <th class="col-1" scope="col">Tuesday</th>
+                <th class="col-1" scope="col">Wednesday</th>
+                <th class="col-1" scope="col">Thursday</th>
+                <th class="col-1" scope="col">Friday</th>
+                <th class="col-1" scope="col">Saturday</th>
+            </thead>
+            <tbody>
+                @if(Calendar.Count != 0) {
+                    @for(int i = 0; i < 5; i++) {
+                        <tr>
+                            @for(int j = 0; j < 7; j++){
+                                <td>
+                                    <div class="log-date">
+                                        @GetSingleDateEntry(i, j)
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+}
+
+@code {
+    private List<Country> AllCountries = new();
+
+    private bool Loaded = false;
+    
+    private Guid SelectedCountry = Guid.Empty;
+    private Guid SelectedStore = Guid.Empty;
+    private Guid SelectedPerson = Guid.Empty;
+
+
+    private DateTime ObservedDate = DateTime.Now.Date;
+    private string MonthAndYear => ObservedDate.ToString("MMMM, yyyy");
+
+    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1);
+    private DateTime LastDay => FirstDay.AddMonths(1);
+    private List<SingleDateEntry> Calendar = new();
+
+
+    private void OnCountryChange(Guid newCountryId) {
+        SelectedCountry = newCountryId;
+        OnStoreChange(Guid.Empty);
+    }
+
+    private void OnStoreChange(Guid newStoreId) {
+        SelectedStore = newStoreId;
+        SelectedPerson = Guid.Empty;
+    }
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
+        Loaded = true;
+        UpdateCalendar();
+    }
+    private void UpdateCalendar() {
+        Calendar = new List<SingleDateEntry>();
+        
+        for (int i = 0; i < (int)FirstDay.DayOfWeek; i++) {
+            Calendar.Add(new SingleDateEntry() {
+                Date = FirstDay.AddDays(i - (int)FirstDay.DayOfWeek)
+            });
+        }
+        for (int i = 0; i < DateTime.DaysInMonth(FirstDay.Year, FirstDay.Month); i++) {
+            Calendar.Add(new SingleDateEntry() {
+                Date = FirstDay.AddDays(i)
+            });
+        }
+        for (int i = DateTime.DaysInMonth(FirstDay.Year, FirstDay.Month); i < 35; i++) {
+            Calendar.Add(new SingleDateEntry() {
+                Date = FirstDay.AddDays(i)
+            });
+        }
+    }
+
+    private RenderFragment GetSingleDateEntry(int i, int j) {
+
+        var offset = i * 7 + j;
+        if (Calendar.Count <= offset) {
+            return @<span>Not found</span>;
+        }
+
+        var current = Calendar[offset];
+
+        return @<span>@current.Date.ToString("dd")</span>;
+    }
+
+    private class SingleDateEntry {
+        public DateTime Date { get; set; }
+        public List<Log> EventLogs { get; set; } = new();
+    }
+}

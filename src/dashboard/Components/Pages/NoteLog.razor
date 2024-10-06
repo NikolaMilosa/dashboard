@@ -156,7 +156,8 @@
         var log = new Log {
             Description = Input.Description,
             LogType = Input.LogType,
-            Person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId)
+            Person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId),
+            Timestamp = DateTime.Now
         };
         await dbContext.EventLogs.AddAsync(log);
         await dbContext.SaveChangesAsync();
