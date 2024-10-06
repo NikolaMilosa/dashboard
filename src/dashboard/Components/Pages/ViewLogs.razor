@@ -118,6 +118,35 @@
         </table>
     </div>
 </div>
+<div class="row">
+    <div class="col-md-6 col-sm-12">
+        <h3>Overview: </h3>
+        <table class="table">
+            <thead>
+                <th class="col-1" scope="col">Log type</th>
+                <th class="col-1" scope="col">Summed up</th>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Woked</td>
+                    @GetWorkedHours()
+                </tr>
+                <tr>
+                    <td>Vacations</td>
+                    @GetVacationDays()
+                </tr>
+                <tr>
+                    <td>Sick leave</td>
+                    @GetSickLeave()
+                </tr>
+                <tr>
+                    <td>Unpaid</td>
+                    @GetUnpaidLeave()
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 }
 
 @code {
@@ -205,6 +234,39 @@
             </ul>
             
         </div>;
+    }
+
+    private RenderFragment GetWorkedHours() {
+        var totalSum = new TimeSpan();
+
+        foreach (var entry in Calendar.Where(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.CheckIn || y.LogType == LogType.CheckOut) != null)) {
+            var checkIn = entry.EventLogs.First(x => x.LogType == LogType.CheckIn).Timestamp;
+            var checkOut = entry.EventLogs.First(x => x.LogType == LogType.CheckOut).Timestamp;
+
+            var curr = checkOut.Subtract(checkIn);
+            totalSum = totalSum.Add(curr);
+        }
+
+
+        return @<td>@((int) totalSum.TotalHours)h @(totalSum.Minutes)min @(totalSum.Seconds)s</td>;
+    }
+
+    private RenderFragment GetVacationDays() {
+        var totalVacationDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.Vacation) != null);
+
+        return @<td>@totalVacationDays days</td>;
+    }
+
+    private RenderFragment GetSickLeave() {
+        var totalSickLeaveDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.SickLeave) != null);
+
+        return @<td>@totalSickLeaveDays days</td>;
+    }
+
+    private RenderFragment GetUnpaidLeave() {
+        var totalUnpaidLeaveDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.UnpaidLeave) != null);
+
+        return @<td>@totalUnpaidLeaveDays days</td>;
     }
 
     private class SingleDateEntry {
