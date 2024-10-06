@@ -189,7 +189,8 @@
             var person = new Person {
                 FirstName = Input.FirstName,
                 LastName = Input.LastName,
-                Store = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId)
+                Store = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId),
+                User = user
             };
 
             await dbContext.People.AddAsync(person);

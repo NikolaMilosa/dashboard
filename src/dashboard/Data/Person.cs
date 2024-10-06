@@ -7,4 +7,5 @@ public class Person {
     public string LastName { get; set; }
 
     public Store Store { get; set; }
+    public ApplicationUser? User { get; set; }
 }

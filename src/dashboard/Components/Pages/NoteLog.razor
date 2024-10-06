@@ -11,6 +11,7 @@
 @using static dashboard.Components.Shared.StatusMessageWithTypes
 
 @inject ApplicationDbContext dbContext;
+@inject AuthenticationStateProvider authStateProvider;
 
 @attribute [Authorize]
 @attribute [StreamRendering]
@@ -26,37 +27,39 @@
                 @if(!Loaded) {
                     <p>Loading data for countries...</p>
                 } else {
-                    <div class="form-floating mb-3">
-                        <InputSelect 
-                        TValue="Guid"
-                        Value="Input.CountryId"
-                        ValueChanged="OnCountryChange"
-                        ValueExpression="@(() => Input.CountryId)"
-                        
-                        class="form-control" aria-required="true" >
-                            <option value="@Guid.Empty">Select country</option>
-                            @foreach(var country in AllCountries) {
-                                <option value="@country.Id">@country.Name</option>
-                            }
-                        </InputSelect>
-                        <label for="country" class="form-label">Country</label>
-                    </div>
-                    <div class="form-floating mb-3">
-                        <InputSelect class="form-control" 
-                        TValue="Guid"
-                        Value="Input.StoreId"
-                        ValueChanged="OnStoreChange"
-                        ValueExpression="@(() => Input.StoreId)"
-                        >
-                            @if(Input.CountryId != Guid.Empty) {
-                                <option value="@Guid.Empty">Select Store</option>
-                                @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
-                                    <option value="@store.Id">@store.Name</option>
+                    <AuthorizeView Roles="admin" Context="another_name">
+                        <div class="form-floating mb-3">
+                            <InputSelect 
+                            TValue="Guid"
+                            Value="Input.CountryId"
+                            ValueChanged="OnCountryChange"
+                            ValueExpression="@(() => Input.CountryId)"
+                            
+                            class="form-control" aria-required="true" >
+                                <option value="@Guid.Empty">Select country</option>
+                                @foreach(var country in AllCountries) {
+                                    <option value="@country.Id">@country.Name</option>
                                 }
-                            }
-                        </InputSelect>
-                        <label for="store" class="form-label">Store</label>
-                    </div>
+                            </InputSelect>
+                            <label for="country" class="form-label">Country</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <InputSelect class="form-control" 
+                            TValue="Guid"
+                            Value="Input.StoreId"
+                            ValueChanged="OnStoreChange"
+                            ValueExpression="@(() => Input.StoreId)"
+                            >
+                                @if(Input.CountryId != Guid.Empty) {
+                                    <option value="@Guid.Empty">Select Store</option>
+                                    @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
+                                        <option value="@store.Id">@store.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                            <label for="store" class="form-label">Store</label>
+                        </div>
+                    </AuthorizeView>
                     <div class="form-floating mb-3">
                         <InputSelect class="form-control" 
                         @bind-Value="Input.UserId"
@@ -104,6 +107,12 @@
 
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
+        var authState = await authStateProvider.GetAuthenticationStateAsync();
+        if (authState != null && !authState.User.IsInRole("admin")) {
+            var person = await dbContext.People.Include(x => x.Store).ThenInclude(x => x.Country).FirstAsync(x => x.User.UserName == authState.User.Identity!.Name);
+            Input.StoreId = person.Store.Id;
+            Input.CountryId = person.Store.Country.Id;
+        }
         Loaded = true;
     }
     
