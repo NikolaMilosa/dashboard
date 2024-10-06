@@ -113,7 +113,6 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
     {
         if (beginning.DayOfWeek == DayOfWeek.Sunday)
         {
-            // 20% of time person will not come to work
             beginning = beginning.AddDays(1);
             continue;
         }

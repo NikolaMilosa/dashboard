@@ -154,10 +154,45 @@
             return;
         }
 
+        var person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId);
+        var today = DateTime.Now.Date;
+        var tomorrow = today.AddDays(1);
+        var todaysLogsForPerson = await dbContext.EventLogs.Where(x => x.Person.Id == person.Id && today.ToUniversalTime() <= x.Timestamp && x.Timestamp < tomorrow.ToUniversalTime()).OrderBy(x => x.Timestamp).ToListAsync();
+
+        if (todaysLogsForPerson.Count > 0) {
+            switch (Input.LogType) {
+                case LogType.UnpaidLeave:
+                case LogType.Vacation:
+                case LogType.SickLeave:
+                case LogType.CheckIn:
+                    status = string.Format("{0} {1} already has logged activity for the day", person.FirstName, person.LastName);
+                    statusType = StatusType.Error;
+                    return;
+                case LogType.CheckOut:
+                    if (todaysLogsForPerson.Count > 1) {
+                        status = string.Format("{0} {1} already checked out today", person.FirstName, person.LastName);
+                        statusType = StatusType.Error;
+                        return;
+                    }
+                    var first = todaysLogsForPerson.First();
+                    if (todaysLogsForPerson.Count == 1 && first.LogType != LogType.CheckIn) {
+                        status = string.Format("{0} {1} cannot be checked out because today he was logged with status {2}", person.FirstName, person.LastName, first.LogType);
+                        statusType = StatusType.Error;
+                        return;
+                    }
+                    break;
+            }
+        }
+        if (todaysLogsForPerson.Count == 0 && Input.LogType == LogType.CheckOut) {
+            status = string.Format("{0} {1} cannot be checked out because he wasn't checked in today", person.FirstName, person.LastName);
+            statusType = StatusType.Error;
+            return;
+        }
+
         var log = new Log {
             Description = Input.Description,
             LogType = Input.LogType,
-            Person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId),
+            Person = person,
             Timestamp = DateTime.Now.ToUniversalTime()
         };
         await dbContext.EventLogs.AddAsync(log);

@@ -212,7 +212,9 @@
 
         var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && FirstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < LastDay.ToUniversalTime()).ToListAsync();
         foreach (var day in Calendar) {
-            day.EventLogs = eventLogsForMonth.Where(x => day.Date.Date == x.Timestamp.Date).OrderBy(x => x.Timestamp).ToList();
+            var beginning = day.Date.Date;
+            var tomorrow = beginning.AddDays(1);
+            day.EventLogs = eventLogsForMonth.Where(x => beginning.ToUniversalTime() <= x.Timestamp && x.Timestamp < tomorrow.ToUniversalTime()).OrderBy(x => x.Timestamp).ToList();
         }
 
     }
