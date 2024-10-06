@@ -65,7 +65,10 @@
     <div class="col-md-4">
         <div class="form-floating mb-3">
             <InputSelect
-            @bind-Value="SelectedPerson"
+            TValue="Guid"
+            Value="@SelectedPerson"
+            ValueChanged="OnPersonChange"
+            ValueExpression="@(() => SelectedPerson)"
             class="form-control" >
                 @if(SelectedCountry != Guid.Empty && SelectedStore != Guid.Empty) {
                     <option value="@Guid.Empty">Select Person</option>
@@ -103,7 +106,7 @@
                         <tr>
                             @for(int j = 0; j < 7; j++){
                                 <td>
-                                    <div class="log-date">
+                                    <div class="col-md-12">
                                         @GetSingleDateEntry(i, j)
                                     </div>
                                 </td>
@@ -130,27 +133,32 @@
     private DateTime ObservedDate = DateTime.Now.Date;
     private string MonthAndYear => ObservedDate.ToString("MMMM, yyyy");
 
-    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1);
+    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1).ToUniversalTime();
     private DateTime LastDay => FirstDay.AddMonths(1);
     private List<SingleDateEntry> Calendar = new();
 
 
-    private void OnCountryChange(Guid newCountryId) {
+    private async Task OnCountryChange(Guid newCountryId) {
         SelectedCountry = newCountryId;
-        OnStoreChange(Guid.Empty);
+        await OnStoreChange(Guid.Empty);
     }
 
-    private void OnStoreChange(Guid newStoreId) {
+    private async Task OnStoreChange(Guid newStoreId) {
         SelectedStore = newStoreId;
-        SelectedPerson = Guid.Empty;
+        await OnPersonChange(Guid.Empty);
+    }
+
+    private async Task OnPersonChange(Guid newPersonId) {
+        SelectedPerson = newPersonId;
+        await UpdateCalendar();
     }
 
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
         Loaded = true;
-        UpdateCalendar();
+        await UpdateCalendar();
     }
-    private void UpdateCalendar() {
+    private async Task UpdateCalendar() {
         Calendar = new List<SingleDateEntry>();
         
         for (int i = 0; i < (int)FirstDay.DayOfWeek; i++) {
@@ -168,18 +176,35 @@
                 Date = FirstDay.AddDays(i)
             });
         }
+
+        if (SelectedPerson == Guid.Empty) {
+            return;
+        }
+
+        var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && FirstDay <= x.Timestamp && x.Timestamp < LastDay).ToListAsync();
+        foreach (var day in Calendar) {
+            day.EventLogs = eventLogsForMonth.Where(x => day.Date.Date == x.Timestamp.Date).ToList();
+        }
+
     }
 
     private RenderFragment GetSingleDateEntry(int i, int j) {
-
         var offset = i * 7 + j;
         if (Calendar.Count <= offset) {
-            return @<span>Not found</span>;
+            return @<div class="row">Not found</div>;
         }
 
         var current = Calendar[offset];
 
-        return @<span>@current.Date.ToString("dd")</span>;
+        return @<div class="col-md-12">
+            <div class="row">@current.Date.ToString("dd")</div>
+            <ul>
+                @foreach(var entry in current.EventLogs) {
+                    <li class="text-wrap">@entry.Timestamp.ToString("HH:mm:ss"), @entry.LogType.GetDisplayName()</li>
+                }
+            </ul>
+            
+        </div>;
     }
 
     private class SingleDateEntry {

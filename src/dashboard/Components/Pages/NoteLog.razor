@@ -157,7 +157,7 @@
             Description = Input.Description,
             LogType = Input.LogType,
             Person = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.First(x => x.Id == Input.UserId),
-            Timestamp = DateTime.Now
+            Timestamp = DateTime.Now.ToUniversalTime()
         };
         await dbContext.EventLogs.AddAsync(log);
         await dbContext.SaveChangesAsync();
