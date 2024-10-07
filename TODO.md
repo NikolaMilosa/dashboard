@@ -1,11 +1,5 @@
 # TODO
 
-## Export:
-Should allow export per country. Export should be in csv format, for given month:
-```csv
-first name, last name, worked hours, minutes, secods, vacations, sick leave, unpaid
-```
-
 ## Display description of log
 Missing on View Logs view
 

@@ -1,0 +1,154 @@
+@page "/exportLogsCsv"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@using dashboard.Components.Account
+@using dashboard.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject IJSRuntime JS
+@inject ApplicationDbContext dbContext;
+@inject IWebHostEnvironment env;
+@inject ILogger<ExportLogsCsv> logger;
+@attribute [Authorize(Roles = "admin")]
+@attribute [StreamRendering]
+
+<PageTitle>Export logs as csv</PageTitle>
+<script>
+  window.triggerFileDownload = (fileName, url) => {
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = fileName ?? '';
+    anchorElement.click();
+    anchorElement.remove();
+  }
+</script>
+<h1>Export logs for a country as csv</h1>
+<hr />
+@if (!Loaded) {
+    <p>Loading countries...</p>
+} else if (DownloadingFile) {
+    <p>Downloading file...</p>
+} else {
+    <div class="row">
+        <div class="col-md-4">
+            <div class="form-floating mb-3">
+                <InputSelect 
+                @bind-Value="SelectedCountryId"
+                class="form-control" aria-required="true" >
+                    <option value="@Guid.Empty">Select country</option>
+                    @foreach(var country in AllCountries) {
+                        <option value="@country.Id">@country.Name</option>
+                    }
+                </InputSelect>
+                <label for="country" class="form-label">Country</label>
+            </div>
+            <div>
+                <button class="w-100 btn btn-lg btn-primary" @onclick="ExportFileFromUrl">Export</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Guid SelectedCountryId;
+    private List<Country> AllCountries = new();
+
+    private bool Loaded = false;
+    private bool DownloadingFile = false;
+
+    protected override async Task OnInitializedAsync() {
+        AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
+
+        foreach(var previouslyGeneratedCsv in Directory.GetFiles(Path.Combine(env.WebRootPath, "files"), "*.csv")) {
+            try {
+                File.Delete(previouslyGeneratedCsv);
+                logger.LogInformation("Successfully deleted {0}", previouslyGeneratedCsv);
+            } catch (Exception e) {
+                logger.LogWarning("Failed to delete {0}. Reason: {1}", previouslyGeneratedCsv, e.Message);
+            }
+        }
+
+        Loaded = true;
+    }
+
+    private async Task ExportFileFromUrl() {
+        DownloadingFile = true;
+        var country = AllCountries.First(x => x.Id == SelectedCountryId);
+        
+        var request = Guid.NewGuid();
+        var currentDate = DateTime.Now;
+        var fileName = string.Format("{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), currentDate.ToString("MMMM"));
+        var fileUrl = string.Format("/files/{0}", FormatRequest(request));
+
+        await AggregateData(country, request, currentDate);
+
+        await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
+        DownloadingFile = false;
+    }
+
+    private string FormatRequest(Guid request) {
+        return request.ToString().Replace("-", "") + ".csv";
+    }
+
+    private string GetPath(Guid request) {
+        return Path.Combine(env.WebRootPath, "files", FormatRequest(request));
+    }
+
+    private async Task AggregateData(Country country, Guid request, DateTime timestamp) {
+        var allPeopleInCountry = country.Stores.SelectMany(x => x.People).ToList();
+        var allPeopleId = allPeopleInCountry.Select(x => x.Id).ToList();
+
+        var firstDay = new DateTime(timestamp.Year, timestamp.Month, 1);
+        var lastDay = firstDay.AddMonths(1);
+
+        var eventLogs = await dbContext.EventLogs.Include(x => x.Person).Where(x => allPeopleId.Contains(x.Person.Id) && firstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < lastDay.ToUniversalTime()).ToListAsync();
+
+        await using(var fileSteram = new FileStream(GetPath(request), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
+        await using(var writer = new StreamWriter(fileSteram)) {
+            await writer.WriteLineAsync("first name, last name, total worked hours, minutes, seconds, vacations (days), sick leaves (days), unpaid (days)");
+
+            foreach(var person in allPeopleInCountry) {
+                var currentLine = GetLineForSinglePerson(person, eventLogs);
+                await writer.WriteLineAsync(currentLine);
+            }
+        }
+    }
+
+    private string GetLineForSinglePerson(Person person, List<Log> nonFilteredLogs) {
+        var logsForPerson = nonFilteredLogs.Where(x => x.Person.Id == person.Id).OrderBy(x => x.Timestamp).ToList();
+
+        var vacations = logsForPerson.Count(x => x.LogType == LogType.Vacation);
+        var sick = logsForPerson.Count(x => x.LogType == LogType.SickLeave);
+        var unpaid = logsForPerson.Count(x => x.LogType == LogType.UnpaidLeave);
+
+        logsForPerson = logsForPerson.Where(x => x.LogType == LogType.CheckIn || x.LogType == LogType.CheckOut).ToList();
+
+        var total = new TimeSpan();
+        if (logsForPerson.Count > 0) {
+            var firstDate = logsForPerson.First().Timestamp.Date;
+            var lastDate = logsForPerson.Last().Timestamp.Date.AddDays(1);
+            while(firstDate < lastDate) {
+                var next = firstDate.AddDays(1);
+
+                var eventsForDay = logsForPerson.Where(x => firstDate <= x.Timestamp && x.Timestamp < next).ToList();
+                
+                for (int i = 0; i < eventsForDay.Count; i += 2) {
+                    var first = eventsForDay[i];
+                    if (eventsForDay.Count <= i + 1) {
+                        // Non checked out day, skipping
+                        continue;
+                    }
+                    var second = eventsForDay[i + 1];
+                    var curr = second.Timestamp.Subtract(first.Timestamp);
+                    total = total.Add(curr);
+                }
+
+                firstDate = next;
+            }
+        }
+        
+        return string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", person.FirstName, person.LastName, (int)total.TotalHours, total.Minutes, total.Seconds, vacations, sick, unpaid);
+    }
+}
