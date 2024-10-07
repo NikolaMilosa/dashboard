@@ -7,7 +7,8 @@
 @using dashboard.Data
 @using Microsoft.EntityFrameworkCore
 
-@inject ApplicationDbContext dbContext;
+@inject ApplicationDbContext dbContext
+@inject IJSRuntime js
 @attribute [Authorize(Roles = "admin")]
 @attribute [StreamRendering]
 
@@ -17,6 +18,20 @@
 @if (!Loaded) {
     <p>Loading countries...</p>
 } else {
+
+<script>
+    function addTooltips() {
+        $('[data-toggle="tooltip"]').tooltip({
+            trigger: 'hover'
+        });
+        $('[data-toggle="tooltip"]').on('mouseleave', function () {
+            $(this).tooltip('hide');
+        });
+        $('[data-toggle="tooltip"]').on('click', function () {
+            $(this).tooltip('dispose');
+        });
+    }
+</script>
 
 <div class="row">
     <div class="col-md-4">
@@ -157,6 +172,10 @@
     private DateTime LastDay => FirstDay.AddMonths(1);
     private List<SingleDateEntry> Calendar = new();
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await js.InvokeVoidAsync("addTooltips");
+    }
 
     private async Task OnCountryChange(Guid newCountryId) {
         SelectedCountry = newCountryId;
