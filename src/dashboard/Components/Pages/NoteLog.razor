@@ -162,23 +162,33 @@
                 case LogType.UnpaidLeave:
                 case LogType.Vacation:
                 case LogType.SickLeave:
-                case LogType.CheckIn:
                     status = string.Format("{0} {1} already has logged activity for the day", person.FirstName, person.LastName);
                     statusType = StatusType.Error;
                     return;
+                case LogType.CheckIn:
+                    if (todaysLogsForPerson.Last().LogType == LogType.CheckOut) {
+                        // Only valid possiblity
+                        break;
+                    }
+                    statusType = StatusType.Error;
+                    if (todaysLogsForPerson.Last().LogType == LogType.CheckIn) {
+                        status = string.Format("{0} {1} is already checked in", person.FirstName, person.LastName);
+                    } else {
+                        status = string.Format("{0} {1} has his status for today already marked", person.FirstName, person.LastName);
+                    }
+                    return;
                 case LogType.CheckOut:
-                    if (todaysLogsForPerson.Count > 1) {
-                        status = string.Format("{0} {1} already checked out today", person.FirstName, person.LastName);
-                        statusType = StatusType.Error;
-                        return;
+                    if (todaysLogsForPerson.Last().LogType == LogType.CheckIn) {
+                        // Only valid possibility
+                        break;
                     }
-                    var first = todaysLogsForPerson.First();
-                    if (todaysLogsForPerson.Count == 1 && first.LogType != LogType.CheckIn) {
-                        status = string.Format("{0} {1} cannot be checked out because today he was logged with status {2}", person.FirstName, person.LastName, first.LogType);
-                        statusType = StatusType.Error;
-                        return;
+                    statusType = StatusType.Error;
+                    if (todaysLogsForPerson.Last().LogType == LogType.CheckOut) {
+                        status = string.Format("{0} {1} is already checked out", person.FirstName, person.LastName);
+                    } else {
+                        status = string.Format("{0} {1} has his status for today already marked");
                     }
-                    break;
+                    return;
             }
         }
         if (todaysLogsForPerson.Count == 0 && Input.LogType == LogType.CheckOut) {

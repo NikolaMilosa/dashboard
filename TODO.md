@@ -6,9 +6,6 @@ Should allow export per country. Export should be in csv format, for given month
 first name, last name, worked hours, minutes, secods, vacations, sick leave, unpaid
 ```
 
-## Note Log validation
-Its possible to have multiple pair's of checkin-checkout
-
 ## Display description of log
 Missing on View Logs view
 

@@ -242,11 +242,17 @@
         var totalSum = new TimeSpan();
 
         foreach (var entry in Calendar.Where(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.CheckIn || y.LogType == LogType.CheckOut) != null)) {
-            var checkIn = entry.EventLogs.First(x => x.LogType == LogType.CheckIn).Timestamp;
-            var checkOut = entry.EventLogs.First(x => x.LogType == LogType.CheckOut).Timestamp;
-
-            var curr = checkOut.Subtract(checkIn);
-            totalSum = totalSum.Add(curr);
+            for (int i = 0; i < entry.EventLogs.Count; i += 2) {
+                var first = entry.EventLogs[i];
+                if (entry.EventLogs.Count <= i + 1) {
+                    // Not checked out for this day which
+                    // is invalid so skipping.
+                    continue;
+                }
+                var last = entry.EventLogs[i + 1];
+                var curr = last.Timestamp.Subtract(first.Timestamp);
+                totalSum = totalSum.Add(curr);
+            }
         }
 
 
