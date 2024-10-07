@@ -8,7 +8,6 @@
 @using Microsoft.EntityFrameworkCore
 
 @inject ApplicationDbContext dbContext
-@inject IJSRuntime js
 @attribute [Authorize(Roles = "admin")]
 @attribute [StreamRendering]
 
@@ -18,20 +17,6 @@
 @if (!Loaded) {
     <p>Loading countries...</p>
 } else {
-
-<script>
-    function addTooltips() {
-        $('[data-toggle="tooltip"]').tooltip({
-            trigger: 'hover'
-        });
-        $('[data-toggle="tooltip"]').on('mouseleave', function () {
-            $(this).tooltip('hide');
-        });
-        $('[data-toggle="tooltip"]').on('click', function () {
-            $(this).tooltip('dispose');
-        });
-    }
-</script>
 
 <div class="row">
     <div class="col-md-4">
@@ -172,11 +157,6 @@
     private DateTime LastDay => FirstDay.AddMonths(1);
     private List<SingleDateEntry> Calendar = new();
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        await js.InvokeVoidAsync("addTooltips");
-    }
-
     private async Task OnCountryChange(Guid newCountryId) {
         SelectedCountry = newCountryId;
         await OnStoreChange(Guid.Empty);
@@ -242,12 +222,36 @@
             <ul>
                 @foreach(var entry in current.EventLogs) {
                     <li class="text-wrap">@if (!string.IsNullOrEmpty(entry.Description)){
-                            <span style="margin-right: 3px;" data-toggle="tooltip" title="@entry.Description">
+                            <span style="margin-right: 3px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#id_@entry.Id">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 20 20" >
   <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
   <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
 </svg>
                             </span>
+
+                            <!-- Modal -->
+                            <div class="modal fade" id="id_@entry.Id" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="staticBackdropLabel">Description</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <dl class="row">
+                                            <dt class="col-sm-3">Time</dt>
+                                            <dd class="col-sm-9">@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy")</dd>
+
+                                            <dt class="col-sm-3">Type</dt>
+                                            <dd class="col-sm-9">@entry.LogType.GetDisplayName()</dd>
+
+                                            <dt class="col-sm-3">Description</dt>
+                                            <dd class="col-sm-9">@entry.Description</dd>
+                                        </dl>
+                                    </div>
+                                    </div>
+                                </div>
+                            </div>
                         } @entry.Timestamp.ToLocalTime().ToString("HH:mm:ss"), @entry.LogType.GetDisplayName()</li>
                 }
             </ul>
