@@ -9,6 +9,7 @@
 @using Microsoft.EntityFrameworkCore
 
 @inject ApplicationDbContext dbContext;
+@inject IJSRuntime js;
 @attribute [Authorize(Roles = "admin")]
 @attribute [StreamRendering]
 <PageTitle>View people</PageTitle>
@@ -65,7 +66,6 @@
                             <label for="store" class="form-label">Store</label>
                         }
                     </div>
-                }
         </section>
     </div>
 </div>
@@ -80,16 +80,76 @@
                         <th>Id</th>
                         <th>First name</th>
                         <th>Last name</th>
-                        <th>View arrivals</th>
+                        <th>Modify user</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach(var person in People) {
                         <tr>
-                            <td>@person.Id</td>
-                            <td>@person.FirstName</td>
-                            <td>@person.LastName</td>
-                            <td><a href="/arrivals">Arrivals</a></td>
+                            <td>@person.Person.Id</td>
+                            <td>@person.Person.FirstName</td>
+                            <td>@person.Person.LastName</td>
+                            <td>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 20 20" data-bs-toggle="modal" data-bs-target="#id_@person.Person.Id" style="cursor: pointer;">
+                                    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                                    <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
+                                </svg>
+
+                                <!-- Modal -->
+                                <div class="modal fade" id="id_@person.Person.Id" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="staticBackdropLabel">Modify person</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <dl class="row">
+                                                    <dt class="col-sm-3">Name</dt>
+                                                    <dd class="col-sm-9">@person.Person.FirstName @person.Person.LastName</dd>
+
+                                                    <dt class="col-sm-3">Country</dt>
+                                                    <dd class="col-sm-9">
+                                                        <div class="form-floating mb-3">
+                                                             <InputSelect 
+                                                                TValue="Guid"
+                                                                Value="person.CountryId"
+                                                                ValueExpression="@(() => person.CountryId)"
+                                                                ValueChanged="person.CountryChanged"
+                                                                class="form-control" aria-required="true" >
+                                                                    @foreach(var country in AllCountries) {
+                                                                        <option value="@country.Id">@country.Name</option>
+                                                                    }
+                                                                </InputSelect>
+                                                                <label for="country" class="form-label">Country</label>
+                                                        </div>
+                                                    </dd>
+
+                                                    <dt class="col-sm-3">Store</dt>
+                                                    <dd class="col-sm-9">
+                                                        <div class="form-floating mb-3">
+                                                            <InputSelect 
+                                                                @bind-Value="person.StoreId"
+                                                                class="form-control" aria-required="true" >
+                                                                    <option value="@Guid.Empty">Select store</option>
+                                                                    @if(person.CountryId != Guid.Empty) {
+                                                                         @foreach(var store in AllCountries.First(x => x.Id == person.CountryId).Stores) {
+                                                                            <option value="@store.Id">@store.Name</option>
+                                                                        }
+                                                                    }
+                                                                </InputSelect>
+                                                                <label for="store" class="form-label">Store</label>
+                                                        </div>
+                                                    </dd>
+                                                </dl>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-primary" @onclick="() => UpdatePerson(person)" data-bs-dismiss="modal">Save changes</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -103,7 +163,7 @@
     private bool Loaded = false;
     private Guid CountryId = Guid.Empty;
     private Guid StoreId = Guid.Empty;
-    private List<Person> People = new();
+    private List<PersonViewModel> People = new();
 
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
@@ -126,6 +186,40 @@
             return;
         }
 
-        People = await dbContext.People.Include(x => x.Store).Where(x => x.Store.Id == StoreId).ToListAsync();
+        People = await dbContext.People.Include(x => x.Store).Where(x => x.Store.Id == StoreId).Select(x => new PersonViewModel {
+            Person = x,
+            CountryId = CountryId,
+            StoreId = StoreId
+        }).ToListAsync();
+    }
+
+    private async Task UpdatePerson(PersonViewModel person) {
+        if (person.CountryId == Guid.Empty || person.StoreId == Guid.Empty) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("When changing the store, be sure to select both the country and store correctly! One of them wasn't selected"), "danger");
+            return;
+        }
+        var newStore = AllCountries.First(x => x.Id == person.CountryId).Stores.First(x => x.Id == person.StoreId);
+        if (newStore.Id == person.Person.Store.Id) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} is already a member of that store", person.Person.FirstName, person.Person.LastName), "warning");
+            // No changes made
+            return;
+        }
+        var onlyPerson = person.Person;
+        onlyPerson.Store = newStore;
+        dbContext.People.Update(onlyPerson);
+        await dbContext.SaveChangesAsync();
+        await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} has been moved to {2} ({3})", person.Person.FirstName, person.Person.LastName, newStore.Name, newStore.Country.Name), "success");
+        await OnChange();
+    }
+
+    public class PersonViewModel {
+        public Person Person { get; set; } = new();
+        public Guid CountryId { get; set; } = Guid.Empty;
+        public Guid StoreId { get; set; } = Guid.Empty;
+
+        public void CountryChanged(Guid newCountry) {
+            CountryId = newCountry;
+            StoreId = Guid.Empty;
+        }
     }
 }

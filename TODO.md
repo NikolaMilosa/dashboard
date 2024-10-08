@@ -9,5 +9,3 @@ Admin should be able to change the store of a person.
 ## Possiblity to change the role of the person
 Admin should be able to promote a person into a signer, and also take it away. Add option to delete current person who is taking notes.
 
-## CheckOut all
-It should be possible to automatically checkOut all. This should be possible at a store level.
