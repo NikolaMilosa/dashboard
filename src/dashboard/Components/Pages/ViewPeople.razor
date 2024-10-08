@@ -81,6 +81,7 @@
                         <th>First name</th>
                         <th>Last name</th>
                         <th>Modify user</th>
+                        <th>Promote/Demote</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -150,6 +151,49 @@
                                     </div>
                                 </div>
                             </td>
+                            <td>
+                                <!-- If the user exists it means this is a person who can log -->
+                                @if (person.Person.User != null) {
+                                    <div class="col-mb-1">
+                                        <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#id_demote_@person.Person.Id">Demote</button>
+                                    </div>
+
+                                    <!-- Modal -->
+                                    <div class="modal fade" id="id_demote_@person.Person.Id" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="staticBackdropLabel">Demote @person.Person.FirstName @person.Person.LastName?</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <dl class="row">
+                                                        <dt class="col-sm-3">Name</dt>
+                                                        <dd class="col-sm-9">@person.Person.FirstName @person.Person.LastName</dd>
+
+                                                        <dt class="col-sm-3">Email</dt>
+                                                        <dd class="col-sm-9">@person.Person.User.Email</dd>
+                                                    </dl>
+                                                    <hr/>
+                                                    <span>
+                                                        If you click <em>Proceed</em> the user will no longer be able to log in to the dashboard
+                                                        and take logs of activities.
+                                                    </span>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-primary" @onclick="() => Demote(person)" data-bs-dismiss="modal">Proceed</button>
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abort</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                } else {
+                                    <div class="col-mb-1">
+                                        <button class="btn btn-info w-100">Promote</button>
+                                    </div>
+                                    <!-- Modal -->
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -186,7 +230,7 @@
             return;
         }
 
-        People = await dbContext.People.Include(x => x.Store).Where(x => x.Store.Id == StoreId).Select(x => new PersonViewModel {
+        People = await dbContext.People.Include(x => x.Store).Include(x => x.User).Where(x => x.Store.Id == StoreId).Select(x => new PersonViewModel {
             Person = x,
             CountryId = CountryId,
             StoreId = StoreId
@@ -209,6 +253,21 @@
         dbContext.People.Update(onlyPerson);
         await dbContext.SaveChangesAsync();
         await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} has been moved to {2} ({3})", person.Person.FirstName, person.Person.LastName, newStore.Name, newStore.Country.Name), "success");
+        await OnChange();
+    }
+
+    private async Task Demote(PersonViewModel person) {
+        if (person.Person.User == null) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} is not a note taker at the moment.", person.Person.FirstName, person.Person.LastName), "danger");
+            return;
+        }
+
+        dbContext.Users.Remove(person.Person.User);
+        person.Person.User = null;
+        dbContext.People.Update(person.Person);
+
+        await dbContext.SaveChangesAsync();
+        await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} is no longer a note taker.", person.Person.FirstName, person.Person.LastName), "success");
         await OnChange();
     }
 
