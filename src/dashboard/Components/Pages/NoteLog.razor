@@ -25,7 +25,11 @@
         <EditForm Model="Input" method="post" OnValidSubmit="MakeNoteLog" FormName="noteLog">
                 <ValidationSummary class="text-danger" role="alert" />
                 @if(!Loaded) {
-                    <p>Loading data for countries...</p>
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
                 } else {
                     <AuthorizeView Roles="admin" Context="another_name">
                         <div class="form-floating mb-3">

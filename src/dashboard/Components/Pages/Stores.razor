@@ -16,7 +16,9 @@
 <PageTitle>Stores</PageTitle>
 <h1>Stores</h1>
 @if(!Loaded) {
-    <p>Fetching stores...</p>
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
 } else if (AllCountries.Count == 0) {
     <p>There are no countres at the moment so you won't be able to create any stores.</p>
     <a href="/countries">Click here to add some countreis</a>

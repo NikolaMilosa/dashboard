@@ -27,9 +27,13 @@
 <h1>Export logs for a country as csv</h1>
 <hr />
 @if (!Loaded) {
-    <p>Loading countries...</p>
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
 } else if (DownloadingFile) {
-    <p>Downloading file...</p>
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
 } else {
     <div class="row">
         <div class="col-md-4">

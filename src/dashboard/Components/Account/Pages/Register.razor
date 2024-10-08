@@ -51,50 +51,69 @@
                 <label for="confirm-password">Confirm Password</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
-            @if (Roles == null || Roles.Count == 0)
-            {
-                <p><em>Loading...</em></p>
-            } else {
-                <div class="form-floating mb-3">
+            <div class="form-floating mb-3">
+                @if(!Loaded) {
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                } else {
                     <InputSelect @bind-Value="Input.Role" class="form-control">
                         @foreach (var role in Roles) {
                             <option value="@role">@role</option>
                         }
                     </InputSelect>
-                <label for="role">Role</label>
+                    <label for="role">Role</label>
+                }
             </div>
-            }
             @if (Input.Role == "user") {
                 <div class="form-floating mb-3">
-                        <InputSelect 
-                        TValue="Guid"
-                        Value="Input.CountryId"
-                        ValueChanged="OnCountryChange"
-                        ValueExpression="@(() => Input.CountryId)"
-                        
-                        class="form-control" aria-required="true" >
-                            <option value="@Guid.Empty">Select country</option>
-                            @foreach(var country in AllCountries) {
-                                <option value="@country.Id">@country.Name</option>
-                            }
-                        </InputSelect>
-                        <label for="country" class="form-label">Country</label>
+                        @if(!Loaded) {
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        } else {
+                            <InputSelect 
+                            TValue="Guid"
+                            Value="Input.CountryId"
+                            ValueChanged="OnCountryChange"
+                            ValueExpression="@(() => Input.CountryId)"
+                            
+                            class="form-control" aria-required="true" >
+                                <option value="@Guid.Empty">Select country</option>
+                                @foreach(var country in AllCountries) {
+                                    <option value="@country.Id">@country.Name</option>
+                                }
+                            </InputSelect>
+                            <label for="country" class="form-label">Country</label>
+                        }
                     </div>
                     <div class="form-floating mb-3">
-                        <InputSelect class="form-control" 
-                        TValue="Guid"
-                        Value="Input.StoreId"
-                        ValueChanged="OnStoreChange"
-                        ValueExpression="@(() => Input.StoreId)"
-                        >
-                            @if(Input.CountryId != Guid.Empty) {
-                                <option value="@Guid.Empty">Select Store</option>
-                                @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
-                                    <option value="@store.Id">@store.Name</option>
+                        @if(!Loaded) {
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        } else {
+                            <InputSelect class="form-control" 
+                            TValue="Guid"
+                            Value="Input.StoreId"
+                            ValueChanged="OnStoreChange"
+                            ValueExpression="@(() => Input.StoreId)"
+                            >
+                                @if(Input.CountryId != Guid.Empty) {
+                                    <option value="@Guid.Empty">Select Store</option>
+                                    @foreach(var store in AllCountries.First(x => x.Id == Input.CountryId).Stores) {
+                                        <option value="@store.Id">@store.Name</option>
+                                    }
                                 }
-                            }
-                        </InputSelect>
-                        <label for="store" class="form-label">Store</label>
+                            </InputSelect>
+                            <label for="store" class="form-label">Store</label>
+                        }
                     </div>
                     <div class="form-floating mb-3">
                         <InputText @bind-Value="Input.FirstName" class="form-control" aria-required="true" placeholder="John" />
@@ -111,6 +130,7 @@
 </div>
 
 @code {
+    private bool Loaded = false;
     private IEnumerable<IdentityError>? identityErrors;
 
     [SupplyParameterFromForm]
@@ -224,6 +244,7 @@
         Roles.Add("user");
 
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ToListAsync();
+        Loaded = true;
     }
 
     public void OnCountryChange(Guid newCountry) {
