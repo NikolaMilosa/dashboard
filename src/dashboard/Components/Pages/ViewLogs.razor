@@ -79,12 +79,15 @@
     <div class="col-md-12">
         <div class="row">
             <div class="col-md-4">
-                <InputDate class="form-control" 
-                Value="@FirstDay"
-                TValue="DateOnly"
-                ValueChanged="OnFirstDayChanged"
-                ValueExpression="@(() => FirstDay)"
-                />
+                <h4>@MonthAndYear</h4>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-1">
+                <button class="btn btn-secondary" @onclick="PreviousMonth">&lt;</button>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-secondary" @onclick="NextMonth">&gt;</button>
             </div>
         </div>
         <hr/>
@@ -174,11 +177,6 @@
 
     private async Task OnPersonChange(Guid newPersonId) {
         SelectedPerson = newPersonId;
-        await UpdateCalendar();
-    }
-
-    private async Task OnFirstDayChanged(DateOnly date) {
-        FirstDay = date;
         await UpdateCalendar();
     }
 
@@ -309,6 +307,16 @@
         var totalUnpaidLeaveDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.UnpaidLeave) != null);
 
         return @<td>@totalUnpaidLeaveDays days</td>;
+    }
+
+    private async Task NextMonth() {
+        FirstDay = FirstDay.AddMonths(1);
+        await UpdateCalendar();
+    }
+
+    private async Task PreviousMonth() {
+        FirstDay = FirstDay.AddMonths(-1);
+        await UpdateCalendar();
     }
 
     private class SingleDateEntry {
