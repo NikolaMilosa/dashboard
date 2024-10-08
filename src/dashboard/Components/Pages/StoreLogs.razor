@@ -68,6 +68,15 @@
 <div class="row">
     <div class="col-md-4">
         <div class="form-floating mb-3">
+            <InputDate 
+            TValue="DateOnly"
+            Value="@date"
+            ValueChanged="OnDateChange"
+            ValueExpression="@(() => date)"
+            class="form-control"
+            />
+        </div>
+        <div class="form-floating mb-3">
             @if(!Loaded) {
                 <div class="text-center">
                     <div class="spinner-border" role="status">
@@ -197,7 +206,7 @@
     private bool RenderedStoreLogs = true;
     private List<PersonWithEventsViewModel> personEvents = new();
     
-    private DateTime date = DateTime.Now.Date;
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Now);
 
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
@@ -214,6 +223,11 @@
         await UpdatePeople();
     }
 
+    private async Task OnDateChange(DateOnly newDate) {
+        date = newDate;
+        await UpdatePeople();
+    }
+
     private async Task UpdatePeople() {
         RenderedStoreLogs = false;
         personEvents = AllCountries.First(x => x.Id == SelectedCountryId).Stores.First(x => x.Id == SelectedStoreId).People.Select(x => new PersonWithEventsViewModel {
@@ -223,7 +237,7 @@
 
         var personIds = personEvents.Select(x => x.person.Id).ToList();
         var tomorrow = date.AddDays(1);
-        var allEvents = await dbContext.EventLogs.Include(x => x.Person).Where(x => personIds.Contains(x.Person.Id) && date.ToUniversalTime() <= x.Timestamp && x.Timestamp < tomorrow.ToUniversalTime()).ToListAsync();
+        var allEvents = await dbContext.EventLogs.Include(x => x.Person).Where(x => personIds.Contains(x.Person.Id) && date.ToDateTime(new TimeOnly()).ToUniversalTime() <= x.Timestamp && x.Timestamp < tomorrow.ToDateTime(new TimeOnly()).ToUniversalTime()).ToListAsync();
         foreach(var personEvent in personEvents) {
             personEvent.eventLogs = allEvents.Where(x => x.Person.Id == personEvent.person.Id).ToList();
         }
