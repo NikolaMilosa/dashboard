@@ -79,7 +79,12 @@
     <div class="col-md-12">
         <div class="row">
             <div class="col-md-4">
-                <h3>@MonthAndYear, @FirstDay.DayOfWeek</h3>
+                <InputDate class="form-control" 
+                Value="@FirstDay"
+                TValue="DateOnly"
+                ValueChanged="OnFirstDayChanged"
+                ValueExpression="@(() => FirstDay)"
+                />
             </div>
         </div>
         <hr/>
@@ -152,11 +157,9 @@
     private Guid SelectedPerson = Guid.Empty;
 
 
-    private DateTime ObservedDate = DateTime.Now.Date;
-    private string MonthAndYear => ObservedDate.ToString("MMMM, yyyy");
-
-    private DateTime FirstDay => new DateTime(ObservedDate.Year, ObservedDate.Month, 1);
-    private DateTime LastDay => FirstDay.AddMonths(1);
+    private DateOnly FirstDay = new DateOnly(DateTime.Now.Date.Year, DateTime.Now.Date.Month, 1);
+    private string MonthAndYear => FirstDay.ToString("MMMM, yyyy");
+    private DateOnly LastDay => FirstDay.AddMonths(1);
     private List<SingleDateEntry> Calendar = new();
 
     private async Task OnCountryChange(Guid newCountryId) {
@@ -174,27 +177,35 @@
         await UpdateCalendar();
     }
 
+    private async Task OnFirstDayChanged(DateOnly date) {
+        FirstDay = date;
+        await UpdateCalendar();
+    }
+
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
         Loaded = true;
         await UpdateCalendar();
     }
+
     private async Task UpdateCalendar() {
         Calendar = new List<SingleDateEntry>();
+        var firstDay = FirstDay.ToDateTime(new TimeOnly());
+        var lastDay = LastDay.ToDateTime(new TimeOnly());
         
         for (int i = 0; i < (int)FirstDay.DayOfWeek; i++) {
             Calendar.Add(new SingleDateEntry() {
-                Date = FirstDay.AddDays(i - (int)FirstDay.DayOfWeek)
+                Date = firstDay.AddDays(i - (int)firstDay.DayOfWeek)
             });
         }
         for (int i = 0; i < DateTime.DaysInMonth(FirstDay.Year, FirstDay.Month); i++) {
             Calendar.Add(new SingleDateEntry() {
-                Date = FirstDay.AddDays(i)
+                Date = firstDay.AddDays(i)
             });
         }
         for (int i = DateTime.DaysInMonth(FirstDay.Year, FirstDay.Month); i < 35; i++) {
             Calendar.Add(new SingleDateEntry() {
-                Date = FirstDay.AddDays(i)
+                Date = firstDay.AddDays(i)
             });
         }
 
@@ -202,7 +213,7 @@
             return;
         }
 
-        var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && FirstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < LastDay.ToUniversalTime()).ToListAsync();
+        var eventLogsForMonth = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == SelectedPerson && firstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < lastDay.ToUniversalTime()).ToListAsync();
         foreach (var day in Calendar) {
             var beginning = day.Date.Date;
             var tomorrow = beginning.AddDays(1);
