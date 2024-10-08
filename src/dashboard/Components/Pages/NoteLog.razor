@@ -92,9 +92,14 @@
                 </div>
 
                 <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log</button>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary mb-3">Log</button>
                 </div>
         </EditForm>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-4">
+        <button class="btn btn-warning w-100 btn-lg" @onclick="CheckoutAll">Checkout all</button>
     </div>
 </div>
 
@@ -215,6 +220,53 @@
         await OnInitializedAsync();
 
         status = $"Successfully logged {log.LogType.GetDisplayName()} for {log.Person.FirstName} {log.Person.LastName}";
+        statusType = StatusType.Success;
+    }
+
+    private async Task CheckoutAll() {
+        var error = new StringBuilder();
+        if (Input.CountryId == Guid.Empty) {
+            error.Append("Country is mandatory.");
+        }
+        if (Input.StoreId == Guid.Empty) {
+            if (error.Length != 0) {
+                error.AppendLine();
+            }
+            error.Append("Store is mandatory.");
+        }
+
+        if (error.Length != 0) {
+            status = error.ToString();
+            statusType = StatusType.Error;
+            return;
+        }
+
+        var storeUsers = AllCountries.First(x => x.Id == Input.CountryId).Stores.First(x => x.Id == Input.StoreId).People.Select(x => x.Id).ToList();
+        var today = DateTime.Now.Date;
+        var tomorrow = today.AddDays(1);
+
+        var allEvents = await dbContext.EventLogs.Include(x => x.Person).Where(x => storeUsers.Contains(x.Person.Id) && today.ToUniversalTime() <= x.Timestamp && x.Timestamp < tomorrow.ToUniversalTime()).ToListAsync();
+        var signoutTimestamp = DateTime.Now;
+        var checkedOut = 0;
+        foreach(var user in storeUsers) {
+            var forUser = allEvents.Where(x => x.Person.Id == user).OrderBy(x => x.Timestamp);
+            if (forUser.Count() == 0) {
+                continue;
+            }
+            var last = forUser.Last();
+            if (last.LogType == LogType.CheckIn) {
+                await dbContext.EventLogs.AddAsync(new Log {
+                    Person = last.Person,
+                    Description = "Signed out with all other people",
+                    Timestamp = signoutTimestamp.ToUniversalTime(),
+                    LogType = LogType.CheckOut
+                });
+                checkedOut++;
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+        status = checkedOut == 0 ? "Didn't have to check out anybody" : string.Format("Successfully checked out {0}", checkedOut);
         statusType = StatusType.Success;
     }
 
