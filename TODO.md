@@ -1,8 +1,5 @@
 # TODO
 
-## Add posibility to switch month backwards in View Logs
-In View logs we should be able to look at previous month state for a person
-
 ## Add toasters for adding entities.
 Generally a better UX to have toasters everywhere possible.
 
