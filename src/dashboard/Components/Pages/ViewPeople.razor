@@ -3,11 +3,16 @@
 
 @using Microsoft.AspNetCore.Authorization
 @using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Identity.EntityFrameworkCore
+@using System.Text
 @using dashboard.Components.Account
 @using dashboard.Components.Account.Shared
 @using dashboard.Data
 @using Microsoft.EntityFrameworkCore
 
+@inject UserManager<ApplicationUser> userManager
+@inject IUserStore<ApplicationUser> userStore
 @inject ApplicationDbContext dbContext;
 @inject IJSRuntime js;
 @attribute [Authorize(Roles = "admin")]
@@ -189,9 +194,47 @@
                                     </div>
                                 } else {
                                     <div class="col-mb-1">
-                                        <button class="btn btn-info w-100">Promote</button>
+                                        <button class="btn btn-info w-100" data-bs-toggle="modal" data-bs-target="#id_promote_@person.Person.Id">Promote</button>
                                     </div>
+
                                     <!-- Modal -->
+                                    <div class="modal fade" id="id_promote_@person.Person.Id" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="staticBackdropLabel">Promote @person.Person.FirstName @person.Person.LastName?</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <dl class="row">
+                                                        <dt class="col-sm-3">Name</dt>
+                                                        <dd class="col-sm-9">@person.Person.FirstName @person.Person.LastName</dd>
+
+                                                        <dt class="col-sm-3">Email</dt>
+                                                        <dd class="col-sm-9">
+                                                            <div class="form-floating mb-3">
+                                                                <InputText class="form-control" placeholder="john@gmail.com" @bind-Value="person.Email"/>
+                                                                <label for="email" class="form-label">Email</label>
+                                                            </div>
+                                                            <div class="form-floating mb-3">
+                                                                <InputText class="form-control" type="password" @bind-Value="person.Password" placeholder="Password"/>
+                                                                <label for="email" class="form-label">password</label>
+                                                            </div>
+                                                        </dd>
+                                                    </dl>
+                                                    <hr/>
+                                                    <span>
+                                                        If you click <em>Proceed</em> the user will be granted access to the dashboard with 
+                                                        the credentials you just created. He will also be able to log events.
+                                                    </span>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-primary" @onclick="() => Promote(person)" data-bs-dismiss="modal">Proceed</button>
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abort</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 }
                             </td>
                         </tr>
@@ -270,6 +313,53 @@
         await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} is no longer a note taker.", person.Person.FirstName, person.Person.LastName), "success");
         await OnChange();
     }
+    
+    private async Task Promote(PersonViewModel person) {
+        if (person.Person.User != null) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} already has access to the portal and can log events.", person.Person.FirstName, person.Person.LastName), "danger");
+            return;
+        }
+
+        var error = new StringBuilder();
+        if (string.IsNullOrEmpty(person.Email)) {
+            error.Append("Email is requred!");
+        }
+        if (string.IsNullOrEmpty(person.Password)) {
+            if (error.Length != 0) {
+                error.AppendLine();
+            }
+            error.Append("Password is required!");
+        }
+
+        if (error.Length != 0) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), error.ToString(), "danger");
+            return;
+        }
+
+        var user = Activator.CreateInstance<ApplicationUser>();
+
+        await userStore.SetUserNameAsync(user, person.Email, CancellationToken.None);
+        var emailStore = (IUserEmailStore<ApplicationUser>)userStore;
+        await emailStore.SetEmailAsync(user, person.Email, CancellationToken.None);
+
+        user.EmailConfirmed = true;
+
+        var result = await userManager.CreateAsync(user, person.Password);
+
+        if (!result.Succeeded)
+        {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Failed to create user for person. Received errors: {0}", string.Join(", ", result.Errors)), "danger");
+            return;
+        }
+
+        person.Person.User = user;
+        dbContext.People.Update(person.Person);
+        await dbContext.SaveChangesAsync();
+
+        await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Successfully promoted {0} {1} into a note taker. He/She can log in using the email {2} and a password you just setup!", person.Person.FirstName, person.Person.LastName, person.Email), "success");
+        
+        await OnChange();
+    }
 
     public class PersonViewModel {
         public Person Person { get; set; } = new();
@@ -280,5 +370,8 @@
             CountryId = newCountry;
             StoreId = Guid.Empty;
         }
+
+        public string Email { get; set; }
+        public string Password { get; set; }
     }
 }
