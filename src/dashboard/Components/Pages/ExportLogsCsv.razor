@@ -38,6 +38,17 @@
     <div class="row">
         <div class="col-md-4">
             <div class="form-floating mb-3">
+                <h4>@MonthAndYear</h4>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-2">
+                    <button class="btn btn-secondary" @onclick="PreviousMonth">&lt;</button>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-secondary" @onclick="NextMonth">&gt;</button>
+                </div>
+            </div>
+            <div class="form-floating mb-3">
                 <InputSelect 
                 @bind-Value="SelectedCountryId"
                 class="form-control" aria-required="true" >
@@ -62,6 +73,9 @@
     private bool Loaded = false;
     private bool DownloadingFile = false;
 
+    private DateOnly FirstDay = new DateOnly(DateTime.Now.Date.Year, DateTime.Now.Date.Month, 1);
+    private string MonthAndYear => FirstDay.ToString("MMMM, yyyy");
+
     protected override async Task OnInitializedAsync() {
         AllCountries = await dbContext.Countries.Include(x => x.Stores).ThenInclude(x => x.People).ToListAsync();
 
@@ -82,11 +96,10 @@
         var country = AllCountries.First(x => x.Id == SelectedCountryId);
         
         var request = Guid.NewGuid();
-        var currentDate = DateTime.Now;
-        var fileName = string.Format("{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), currentDate.ToString("MMMM"));
+        var fileName = string.Format("{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), FirstDay.ToString("MMMM"));
         var fileUrl = string.Format("/files/{0}", FormatRequest(request));
 
-        await AggregateData(country, request, currentDate);
+        await AggregateData(country, request);
 
         await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
         DownloadingFile = false;
@@ -100,11 +113,11 @@
         return Path.Combine(env.WebRootPath, "files", FormatRequest(request));
     }
 
-    private async Task AggregateData(Country country, Guid request, DateTime timestamp) {
+    private async Task AggregateData(Country country, Guid request) {
         var allPeopleInCountry = country.Stores.SelectMany(x => x.People).ToList();
         var allPeopleId = allPeopleInCountry.Select(x => x.Id).ToList();
 
-        var firstDay = new DateTime(timestamp.Year, timestamp.Month, 1);
+        var firstDay = FirstDay.ToDateTime(new TimeOnly());
         var lastDay = firstDay.AddMonths(1);
 
         var eventLogs = await dbContext.EventLogs.Include(x => x.Person).Where(x => allPeopleId.Contains(x.Person.Id) && firstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < lastDay.ToUniversalTime()).ToListAsync();
@@ -154,5 +167,13 @@
         }
         
         return string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", person.FirstName, person.LastName, (int)total.TotalHours, total.Minutes, total.Seconds, vacations, sick, unpaid);
+    }
+
+    private void NextMonth() {
+        FirstDay = FirstDay.AddMonths(1);
+    }
+
+    private void PreviousMonth() {
+        FirstDay = FirstDay.AddMonths(-1);
     }
 }
