@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboard.Components;
 using dashboard.Components.Account;
 using dashboard.Data;
+using dashboard.Jobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdministratorRole",
          policy => policy.RequireRole("admin"));
 });
+
+builder.Services.AddHostedService(x => new LogCleaner(x));
 
 var app = builder.Build();
 
