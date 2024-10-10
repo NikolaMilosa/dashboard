@@ -86,6 +86,7 @@
                         <th>First name</th>
                         <th>Last name</th>
                         <th>Modify user</th>
+                        <th>Delete user</th>
                         <th>Promote/Demote</th>
                     </tr>
                 </thead>
@@ -164,6 +165,38 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-primary" @onclick="() => UpdatePerson(person)" data-bs-dismiss="modal">Save changes</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 20 20" data-bs-toggle="modal" data-bs-target="#id_delete_@person.Person.Id" style="cursor: pointer;">
+                                    <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5M8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5m3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0"/>
+                                </svg>
+
+                                <!-- Modal -->
+                                <div class="modal fade" id="id_delete_@person.Person.Id" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="staticBackdropLabel">Delete @person.Person.FirstName @person.Person.LastName?</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <dl class="row">
+                                                    <dt class="col-sm-3">Name</dt>
+                                                    <dd class="col-sm-9">@person.Person.FirstName @person.Person.LastName</dd>
+                                                </dl>
+                                                <hr/>
+                                                <span>
+                                                    If you click <em>Proceed</em> the user and all the data related to him will be
+                                                    deleted. Are you sure you want to delete this user?
+                                                </span>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-primary" @onclick="() => Delete(person)" data-bs-dismiss="modal">Proceed</button>
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abort</button>
                                             </div>
                                         </div>
                                     </div>
@@ -382,6 +415,20 @@
 
         await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Successfully promoted {0} {1} into a note taker. He/She can log in using the email {2} and a password you just setup!", person.Person.FirstName, person.Person.LastName, person.Email), "success");
         
+        await OnChange();
+    }
+
+    private async Task Delete(PersonViewModel person) {
+        if (person.Person.User != null) {
+            dbContext.Users.Remove(person.Person.User);
+        }
+
+        var eventLogs = await dbContext.EventLogs.Include(x => x.Person).Where(x => x.Person.Id == person.Person.Id).ToListAsync();
+        dbContext.EventLogs.RemoveRange(eventLogs);
+
+        dbContext.People.Remove(person.Person);
+        await dbContext.SaveChangesAsync();
+        await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Successfully deleted {0} {1} and all the logs assosiated with that person. You will no longer see him any of the views.", person.Person.FirstName, person.Person.LastName), "success");
         await OnChange();
     }
 
