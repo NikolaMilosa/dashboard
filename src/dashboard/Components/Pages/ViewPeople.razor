@@ -111,8 +111,21 @@
                                             </div>
                                             <div class="modal-body">
                                                 <dl class="row">
-                                                    <dt class="col-sm-3">Name</dt>
-                                                    <dd class="col-sm-9">@person.Person.FirstName @person.Person.LastName</dd>
+                                                    <dt class="col-sm-3">FirstName</dt>
+                                                    <dd class="col-sm-9">
+                                                        <div class="form-floating mb-3">
+                                                            <InputText class="form-control" @bind-Value="person.Person.FirstName"/>
+                                                            <label for="firstName">First Name</label>
+                                                        </div>
+                                                    </dd>
+
+                                                    <dt class="col-sm-3">LastName</dt>
+                                                    <dd class="col-sm-9">
+                                                        <div class="form-floating mb-3">
+                                                            <InputText class="form-control" @bind-Value="person.Person.LastName"/>
+                                                            <label for="lastName">Last Name</label>
+                                                        </div>
+                                                    </dd>
 
                                                     <dt class="col-sm-3">Country</dt>
                                                     <dd class="col-sm-9">
@@ -276,7 +289,9 @@
         People = await dbContext.People.Include(x => x.Store).Include(x => x.User).Where(x => x.Store.Id == StoreId).Select(x => new PersonViewModel {
             Person = x,
             CountryId = CountryId,
-            StoreId = StoreId
+            StoreId = StoreId,
+            BackupFirstName = x.FirstName,
+            BackupLastName = x.LastName,
         }).ToListAsync();
     }
 
@@ -285,6 +300,15 @@
             await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("When changing the store, be sure to select both the country and store correctly! One of them wasn't selected"), "danger");
             return;
         }
+
+        if (string.IsNullOrEmpty(person.Person.FirstName) || string.IsNullOrEmpty(person.Person.LastName)) {
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), "Both FirstName and LastName are required for a person", "danger");
+            person.Person.FirstName = person.BackupFirstName;
+            person.Person.LastName = person.BackupLastName;
+            await OnChange();
+            return;
+        }
+
         var newStore = AllCountries.First(x => x.Id == person.CountryId).Stores.First(x => x.Id == person.StoreId);
         if (newStore.Id == person.Person.Store.Id) {
             await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Person {0} {1} is already a member of that store", person.Person.FirstName, person.Person.LastName), "warning");
@@ -365,6 +389,9 @@
         public Person Person { get; set; } = new();
         public Guid CountryId { get; set; } = Guid.Empty;
         public Guid StoreId { get; set; } = Guid.Empty;
+
+        public string BackupFirstName { get; set; }
+        public string BackupLastName { get; set; }
 
         public void CountryChanged(Guid newCountry) {
             CountryId = newCountry;

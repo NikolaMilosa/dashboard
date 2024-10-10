@@ -5,6 +5,8 @@ services:
     environment:
       - POSTGRES_PASSWORD=postgres
     user: root
+    ports:
+      - 5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data/
     healthcheck:
