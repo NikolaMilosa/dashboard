@@ -405,7 +405,7 @@
 
         if (!result.Succeeded)
         {
-            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Failed to create user for person. Received errors: {0}", string.Join(", ", result.Errors)), "danger");
+            await js.InvokeVoidAsync("createToast", Guid.NewGuid(), string.Format("Failed to create user for person. Received errors: {0}", string.Join(", ", result.Errors.Select(x => x.Description))), "danger");
             return;
         }
 
