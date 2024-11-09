@@ -16,6 +16,7 @@ public enum LogType
     SickLeave,
     UnpaidLeave,
     Vacation,
+    PaidLeave
 }
 
 public static class LogTypeExtensions
@@ -27,6 +28,7 @@ public static class LogTypeExtensions
         LogType.SickLeave => "Sick Leave",
         LogType.UnpaidLeave => "Unpaid Leave",
         LogType.Vacation => "Vacation",
+        LogType.PaidLeave => "Paid Leave",
         _ => throw new ArgumentOutOfRangeException(nameof(logType), logType, null)
     };
 }
