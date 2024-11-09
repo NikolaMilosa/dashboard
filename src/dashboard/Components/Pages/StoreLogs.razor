@@ -19,7 +19,7 @@
 <div class="row">
     <div class="col-md-4">
         <div class="form-floating mb-3">
-            <InputDate 
+            <InputDate
             TValue="DateOnly"
             Value="@date"
             ValueChanged="OnDateChange"
@@ -35,7 +35,7 @@
                     </div>
                 </div>
             } else {
-                <InputSelect 
+                <InputSelect
                 TValue="Guid"
                 Value="@SelectedCountryId"
                 ValueChanged="OnCountryChange"
@@ -57,7 +57,7 @@
                     </div>
                 </div>
             } else {
-                <InputSelect 
+                <InputSelect
                 TValue="Guid"
                 Value="@SelectedStoreId"
                 ValueChanged="OnStoreChange"
@@ -150,13 +150,13 @@
 @code {
     private bool Loaded = false;
     private List<Country> AllCountries = new();
-    
+
     private Guid SelectedCountryId = Guid.Empty;
     private Guid SelectedStoreId = Guid.Empty;
 
     private bool RenderedStoreLogs = true;
     private List<PersonWithEventsViewModel> personEvents = new();
-    
+
     private DateOnly date = DateOnly.FromDateTime(DateTime.Now);
 
     protected override async Task OnInitializedAsync() {
@@ -167,7 +167,7 @@
     private async Task OnCountryChange(Guid newCountry) {
         SelectedCountryId = newCountry;
         await OnStoreChange(Guid.Empty);
-    } 
+    }
 
     private async Task OnStoreChange(Guid newStore) {
         SelectedStoreId = newStore;
@@ -210,13 +210,13 @@
 
         if (foundEvent.LogType == LogType.CheckIn) {
             // Delete also next checkout if exists
-            var nextCheckout = await dbContext.EventLogs.FirstOrDefaultAsync(x => foundEvent.Timestamp < x.Timestamp && x.LogType == LogType.CheckOut && x.Timestamp < tomorrow.ToUniversalTime());
+            var nextCheckout = await dbContext.EventLogs.FirstOrDefaultAsync(x => foundEvent.Timestamp < x.Timestamp && x.LogType == LogType.CheckOut && x.Timestamp < tomorrow.ToUniversalTime() && x.Person.Id == foundEvent.Person.Id);
             if (nextCheckout != null) {
                 dbContext.EventLogs.Remove(nextCheckout);
             }
         } else if (foundEvent.LogType == LogType.CheckOut) {
             // Delete also prevous checkin
-            var previousCheckIn = await dbContext.EventLogs.FirstAsync(x => today.ToUniversalTime() <= x.Timestamp && x.LogType == LogType.CheckIn && x.Timestamp < foundEvent.Timestamp);
+            var previousCheckIn = await dbContext.EventLogs.FirstAsync(x => today.ToUniversalTime() <= x.Timestamp && x.LogType == LogType.CheckIn && x.Timestamp < foundEvent.Timestamp && x.Person.Id == foundEvent.Person.Id);
             dbContext.EventLogs.Remove(previousCheckIn);
         }
 

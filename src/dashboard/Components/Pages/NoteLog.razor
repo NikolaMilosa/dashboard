@@ -33,12 +33,12 @@
                 } else {
                     <AuthorizeView Roles="admin" Context="another_name">
                         <div class="form-floating mb-3">
-                            <InputSelect 
+                            <InputSelect
                             TValue="Guid"
                             Value="Input.CountryId"
                             ValueChanged="OnCountryChange"
                             ValueExpression="@(() => Input.CountryId)"
-                            
+
                             class="form-control" aria-required="true" >
                                 <option value="@Guid.Empty">Select country</option>
                                 @foreach(var country in AllCountries) {
@@ -48,7 +48,7 @@
                             <label for="country" class="form-label">Country</label>
                         </div>
                         <div class="form-floating mb-3">
-                            <InputSelect class="form-control" 
+                            <InputSelect class="form-control"
                             TValue="Guid"
                             Value="Input.StoreId"
                             ValueChanged="OnStoreChange"
@@ -65,7 +65,7 @@
                         </div>
                     </AuthorizeView>
                     <div class="form-floating mb-3">
-                        <InputSelect class="form-control" 
+                        <InputSelect class="form-control"
                         @bind-Value="Input.UserId"
                         >
                             @if(Input.CountryId != Guid.Empty && Input.StoreId != Guid.Empty) {
@@ -99,14 +99,42 @@
 </div>
 <div class="row">
     <div class="col-md-4">
-        <button class="btn btn-warning w-100 btn-lg" @onclick="CheckoutAll">Checkout all</button>
+        <button class="btn btn-warning w-100 btn-lg" data-bs-toggle="modal" data-bs-target="#id_checkout_all">Checkout all</button>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="id_checkout_all" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="staticBackdropLabel">Checkout all from the selected store?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Store</dt>
+                    <dd class="col-sm-9">@(string.IsNullOrEmpty(Input.StoreName) ? "Not selected" : Input.StoreName)</dd>
+
+                    <dt class="col-sm-3">Country</dt>
+                    <dd class="col-sm-9">@(string.IsNullOrEmpty(Input.CountryName) ? "Not selected" : Input.CountryName)</dd>
+                </dl>
+                <span>
+                    If you click <em>Proceed</em> all the users from selected store will be checked out.
+                    Are you sure you want to check them all out?
+                </span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="CheckoutAll" data-bs-dismiss="modal">Proceed</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abort</button>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
     private string? status = "";
     private StatusType statusType = StatusType.Success;
-    
+
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = new();
 
@@ -119,18 +147,31 @@
         if (authState != null && !authState.User.IsInRole("admin")) {
             var person = await dbContext.People.Include(x => x.Store).ThenInclude(x => x.Country).FirstAsync(x => x.User.UserName == authState.User.Identity!.Name);
             Input.StoreId = person.Store.Id;
+            Input.StoreName = person.Store.Name;
             Input.CountryId = person.Store.Country.Id;
+            Input.CountryName = person.Store.Country.Name;
         }
         Loaded = true;
     }
-    
+
     private void OnCountryChange(Guid newCountryGuid) {
         Input.CountryId = newCountryGuid;
+        var foundCountry = AllCountries.SingleOrDefault(x => x.Id == newCountryGuid);
+        if (foundCountry != null) {
+            Input.CountryName = foundCountry.Name;
+        }
         OnStoreChange(Guid.Empty);
     }
-    
+
     private void OnStoreChange(Guid newStoreId) {
         Input.StoreId = newStoreId;
+        var foundCountry = AllCountries.SingleOrDefault(x => x.Id == Input.CountryId);
+        if (foundCountry != null) {
+            var foundStore = foundCountry.Stores.SingleOrDefault(x => x.Id == newStoreId);
+            if (foundStore != null) {
+                Input.StoreName = foundStore.Name;
+            }
+        }
         Input.UserId = Guid.Empty;
     }
 
@@ -274,13 +315,15 @@
     {
         [Required]
         public Guid CountryId { get; set; } = Guid.Empty;
+        public string CountryName { get; set; } = string.Empty;
 
         [Required]
         public Guid StoreId { get; set; } = Guid.Empty;
+        public string StoreName { get; set; } = string.Empty;
         [Required]
         public Guid UserId { get; set; } = Guid.Empty;
 
         public LogType LogType { get; set; } = LogType.CheckIn;
-        public string Description { get; set; } = "";
+        public string Description { get; set; } = string.Empty;
     }
 }
