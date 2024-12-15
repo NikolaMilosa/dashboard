@@ -144,6 +144,10 @@
                     <td>Unpaid</td>
                     @GetUnpaidLeave()
                 </tr>
+                <tr>
+                    <td>Paid</td>
+                    @GetPaidLeave()
+                </tr>
             </tbody>
         </table>
     </div>
@@ -307,6 +311,12 @@
         var totalUnpaidLeaveDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.UnpaidLeave) != null);
 
         return @<td>@totalUnpaidLeaveDays days</td>;
+    }
+
+    private RenderFragment GetPaidLeave() {
+        var totalPaidLeaveDays = Calendar.Count(x => x.EventLogs.Count != 0 && x.EventLogs.FirstOrDefault(y => y.LogType == LogType.PaidLeave) != null);
+
+        return @<td>@totalPaidLeaveDays days</td>;
     }
 
     private async Task NextMonth() {

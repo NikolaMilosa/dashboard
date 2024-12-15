@@ -124,49 +124,84 @@
 
         await using(var fileSteram = new FileStream(GetPath(request), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
         await using(var writer = new StreamWriter(fileSteram)) {
-            await writer.WriteLineAsync("first name, last name, total worked hours, minutes, seconds, vacations (days), sick leaves (days), unpaid (days)");
+            var generatedMonth = new List<DateOnly>();
+            var counter = firstDay.Date;
+            while (counter != lastDay) {
+                generatedMonth.Add(DateOnly.FromDateTime(counter));
+                counter = counter.AddDays(1);
+            }
+            
+            var daysHeader = string.Join(", ", generatedMonth.Select(x => x.ToString("dd.MM.yyyy")));
+
+            await writer.WriteLineAsync("first name, last name, total worked hours, minutes, seconds, vacations (days), sick leaves (days), unpaid (days), payed (days), " + daysHeader);
 
             foreach(var person in allPeopleInCountry) {
-                var currentLine = GetLineForSinglePerson(person, eventLogs);
+                var currentLine = GetLineForSinglePerson(person, eventLogs, firstDay, lastDay);
                 await writer.WriteLineAsync(currentLine);
             }
         }
     }
 
-    private string GetLineForSinglePerson(Person person, List<Log> nonFilteredLogs) {
+    private string GetLineForSinglePerson(Person person, List<Log> nonFilteredLogs, DateTime firstDate, DateTime lastDate) {
         var logsForPerson = nonFilteredLogs.Where(x => x.Person.Id == person.Id).OrderBy(x => x.Timestamp).ToList();
 
-        var vacations = logsForPerson.Count(x => x.LogType == LogType.Vacation);
-        var sick = logsForPerson.Count(x => x.LogType == LogType.SickLeave);
-        var unpaid = logsForPerson.Count(x => x.LogType == LogType.UnpaidLeave);
+        var sumForDay = new Dictionary<DateOnly, string>();
 
-        logsForPerson = logsForPerson.Where(x => x.LogType == LogType.CheckIn || x.LogType == LogType.CheckOut).ToList();
+        var vacations = 0;
+        var sick = 0;
+        var unpaid = 0;
+        var payed = 0;
 
         var total = new TimeSpan();
         if (logsForPerson.Count > 0) {
-            var firstDate = logsForPerson.First().Timestamp.Date;
-            var lastDate = logsForPerson.Last().Timestamp.Date.AddDays(1);
             while(firstDate < lastDate) {
                 var next = firstDate.AddDays(1);
 
                 var eventsForDay = logsForPerson.Where(x => firstDate <= x.Timestamp && x.Timestamp < next).ToList();
-                
-                for (int i = 0; i < eventsForDay.Count; i += 2) {
-                    var first = eventsForDay[i];
-                    if (eventsForDay.Count <= i + 1) {
-                        // Non checked out day, skipping
-                        continue;
-                    }
-                    var second = eventsForDay[i + 1];
-                    var curr = second.Timestamp.Subtract(first.Timestamp);
-                    total = total.Add(curr);
-                }
 
+                if (eventsForDay.Count == 1) {
+                    var onlyEvent = eventsForDay.First();
+                    switch (onlyEvent.LogType) {
+                        case LogType.SickLeave:
+                            sick += 1;
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (BO)");
+                            break;
+                        case LogType.PaidLeave:
+                            payed += 1;
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (PO)");
+                            break;
+                        case LogType.UnpaidLeave:
+                            unpaid += 1;
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (NPO)");
+                            break;
+                        case LogType.Vacation:
+                            vacations += 1;
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (GOD)");
+                            break;
+                    }
+                } else {
+                    var currForDay = new TimeSpan();
+                    for (int i = 0; i < eventsForDay.Count; i += 2) {
+                        var first = eventsForDay[i];
+                        if (eventsForDay.Count <= i + 1) {
+                            // Non checked out day, skipping
+                            continue;
+                        }
+                        var second = eventsForDay[i + 1];
+                        var curr = second.Timestamp.Subtract(first.Timestamp);
+                        currForDay = currForDay.Add(curr);
+                    }
+
+                    sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("{0}h {1}m {2}s", currForDay.Hours, currForDay.Minutes, currForDay.Seconds);
+                    total = total.Add(currForDay);
+                }
                 firstDate = next;
             }
         }
-        
-        return string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", person.FirstName, person.LastName, (int)total.TotalHours, total.Minutes, total.Seconds, vacations, sick, unpaid);
+
+        var perDay = string.Join(", ", sumForDay.OrderBy(x => x.Key).Select(x => x.Value));
+
+        return string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", person.FirstName, person.LastName, (int)total.TotalHours, total.Minutes, total.Seconds, vacations, sick, unpaid, payed, perDay);
     }
 
     private void NextMonth() {
