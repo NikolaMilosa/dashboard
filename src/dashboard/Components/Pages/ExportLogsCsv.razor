@@ -241,7 +241,7 @@
             
             var daysHeader = string.Join(", ", generatedMonth.Select(x => x.ToString("dd.MM.yyyy")));
 
-            await writer.WriteLineAsync("first name, last name, total working days, " + daysHeader);
+            await writer.WriteLineAsync("first name, last name, total working days, sick leave, paid leave, unpaid leave, vacations, " + daysHeader);
 
             foreach(var person in allPeopleInCountry) {
                 var currentLine = GetWorkingLineForPerson(person, eventLogs, firstDay, lastDay);
@@ -258,6 +258,11 @@
         var workingDays = 0;
         var acceptedWorkingDay = new TimeSpan(7,45,0);
 
+        var vacations = 0;
+        var sick = 0;
+        var unpaid = 0;
+        var payed = 0;
+        
         if (logsForPerson.Count > 0) {
             while(firstDate < lastDate) {
                 var next = firstDate.AddDays(1);
@@ -268,15 +273,19 @@
                     var onlyEvent = eventsForDay.First();
                     switch (onlyEvent.LogType) {
                         case LogType.SickLeave:
+                            sick += 1;
                             sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("BO");
                             break;
                         case LogType.PaidLeave:
+                            payed += 1;
                             sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("PO");
                             break;
                         case LogType.UnpaidLeave:
+                            unpaid += 1;
                             sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("NPO");
                             break;
                         case LogType.Vacation:
+                            vacations += 1;
                             sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("GOD");
                             break;
                     }
@@ -306,7 +315,7 @@
 
         var perDay = string.Join(", ", sumForDay.OrderBy(x => x.Key).Select(x => x.Value));
 
-        return string.Format("{0},{1},{2},{3}", person.FirstName, person.LastName, workingDays, perDay);
+        return string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", person.FirstName, person.LastName, workingDays, sick, payed, unpaid, vacations, perDay);
     }
 
     private void NextMonth() {
