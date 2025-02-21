@@ -60,7 +60,10 @@
                 <label for="country" class="form-label">Country</label>
             </div>
             <div>
-                <button class="w-100 btn btn-lg btn-primary" @onclick="ExportFileFromUrl">Export</button>
+                <button class="w-100 btn btn-lg btn-primary mb-3" @onclick="ExportFileFromUrl">Export</button>
+            </div>
+            <div>
+                <button class="w-100 btn btn-lg btn-primary" @onclick="ExportWorkingDays">Export working days</button>
             </div>
         </div>
     </div>
@@ -100,6 +103,20 @@
         var fileUrl = string.Format("/files/{0}", FormatRequest(request));
 
         await AggregateData(country, request);
+
+        await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
+        DownloadingFile = false;
+    }
+
+    private async Task ExportWorkingDays() {
+        DownloadingFile = true;
+        var country = AllCountries.First(x => x.Id == SelectedCountryId);
+        
+        var request = Guid.NewGuid();
+        var fileName = string.Format("WorkingDays-{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), FirstDay.ToString("MMMM"));
+        var fileUrl = string.Format("/files/{0}", FormatRequest(request));
+
+        await AggregateDataWorkingDays(country, request);
 
         await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
         DownloadingFile = false;
@@ -202,6 +219,94 @@
         var perDay = string.Join(", ", sumForDay.OrderBy(x => x.Key).Select(x => x.Value));
 
         return string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", person.FirstName, person.LastName, (int)total.TotalHours, total.Minutes, total.Seconds, vacations, sick, unpaid, payed, perDay);
+    }
+
+    private async Task AggregateDataWorkingDays(Country country, Guid request) {
+        var allPeopleInCountry = country.Stores.SelectMany(x => x.People).ToList();
+        var allPeopleId = allPeopleInCountry.Select(x => x.Id).ToList();
+
+        var firstDay = FirstDay.ToDateTime(new TimeOnly());
+        var lastDay = firstDay.AddMonths(1);
+
+        var eventLogs = await dbContext.EventLogs.Include(x => x.Person).Where(x => allPeopleId.Contains(x.Person.Id) && firstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < lastDay.ToUniversalTime()).ToListAsync();
+
+        await using(var fileSteram = new FileStream(GetPath(request), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
+        await using(var writer = new StreamWriter(fileSteram)) {
+            var generatedMonth = new List<DateOnly>();
+            var counter = firstDay.Date;
+            while (counter != lastDay) {
+                generatedMonth.Add(DateOnly.FromDateTime(counter));
+                counter = counter.AddDays(1);
+            }
+            
+            var daysHeader = string.Join(", ", generatedMonth.Select(x => x.ToString("dd.MM.yyyy")));
+
+            await writer.WriteLineAsync("first name, last name, total working days, " + daysHeader);
+
+            foreach(var person in allPeopleInCountry) {
+                var currentLine = GetWorkingLineForPerson(person, eventLogs, firstDay, lastDay);
+                await writer.WriteLineAsync(currentLine);
+            }
+        }
+    }
+
+    private string GetWorkingLineForPerson(Person person, List<Log> nonFilteredLogs, DateTime firstDate, DateTime lastDate) {
+        var logsForPerson = nonFilteredLogs.Where(x => x.Person.Id == person.Id).OrderBy(x => x.Timestamp).ToList();
+
+        var sumForDay = new Dictionary<DateOnly, string>();
+
+        var workingDays = 0;
+        var acceptedWorkingDay = new TimeSpan(7,45,0);
+
+        if (logsForPerson.Count > 0) {
+            while(firstDate < lastDate) {
+                var next = firstDate.AddDays(1);
+
+                var eventsForDay = logsForPerson.Where(x => firstDate <= x.Timestamp && x.Timestamp < next).ToList();
+
+                if (eventsForDay.Count == 1) {
+                    var onlyEvent = eventsForDay.First();
+                    switch (onlyEvent.LogType) {
+                        case LogType.SickLeave:
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("BO");
+                            break;
+                        case LogType.PaidLeave:
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("PO");
+                            break;
+                        case LogType.UnpaidLeave:
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("NPO");
+                            break;
+                        case LogType.Vacation:
+                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("GOD");
+                            break;
+                    }
+                } else {
+                    var currForDay = new TimeSpan();
+                    for (int i = 0; i < eventsForDay.Count; i += 2) {
+                        var first = eventsForDay[i];
+                        if (eventsForDay.Count <= i + 1) {
+                            // Non checked out day, skipping
+                            continue;
+                        }
+                        var second = eventsForDay[i + 1];
+                        var curr = second.Timestamp.Subtract(first.Timestamp);
+                        currForDay = currForDay.Add(curr);
+                    }
+
+                    if (currForDay > acceptedWorkingDay) {
+                        workingDays += 1;
+                    }
+                    sumForDay[DateOnly.FromDateTime(firstDate)] = currForDay != TimeSpan.Zero
+                        ? string.Format("{0}:{1}:{2}", currForDay.Hours, currForDay.Minutes, currForDay.Seconds)
+                        : "-";
+                }
+                firstDate = next;
+            }
+        }
+
+        var perDay = string.Join(", ", sumForDay.OrderBy(x => x.Key).Select(x => x.Value));
+
+        return string.Format("{0},{1},{2},{3}", person.FirstName, person.LastName, workingDays, perDay);
     }
 
     private void NextMonth() {
