@@ -94,32 +94,51 @@
         Loaded = true;
     }
 
-    private async Task ExportFileFromUrl() {
+    private async Task ExportFile(string fileFormat, string fileHeader, Func<Person, List<Log>, DateTime, DateTime, string> lineGetter){
         DownloadingFile = true;
         var country = AllCountries.First(x => x.Id == SelectedCountryId);
         
+        var allPeopleInCountry = country.Stores.SelectMany(x => x.People).ToList();
+        var allPeopleId = allPeopleInCountry.Select(x => x.Id).ToList();
+
         var request = Guid.NewGuid();
-        var fileName = string.Format("{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), FirstDay.ToString("MMMM"));
+        var fileName = string.Format(fileFormat, country.Name.Trim().Replace(" ", "_"), FirstDay.ToString("MMMM"));
         var fileUrl = string.Format("/files/{0}", FormatRequest(request));
 
-        await AggregateData(country, request);
+        var firstDay = FirstDay.ToDateTime(new TimeOnly());
+        var lastDay = firstDay.AddMonths(1);
+
+        var eventLogs = await dbContext.EventLogs.Include(x => x.Person).Where(x => allPeopleId.Contains(x.Person.Id) && firstDay.ToUniversalTime() <= x.Timestamp && x.Timestamp < lastDay.ToUniversalTime()).ToListAsync();
+
+        await using(var fileSteram = new FileStream(GetPath(request), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
+        await using(var writer = new StreamWriter(fileSteram)) {
+            var generatedMonth = new List<DateOnly>();
+            var counter = firstDay.Date;
+            while (counter != lastDay) {
+                generatedMonth.Add(DateOnly.FromDateTime(counter));
+                counter = counter.AddDays(1);
+            }
+            
+            var daysHeader = string.Join(", ", generatedMonth.Select(x => x.ToString("dd.MM.yyyy")));
+
+            await writer.WriteLineAsync(fileHeader + daysHeader);
+
+            foreach(var person in allPeopleInCountry) {
+                var currentLine = lineGetter(person, eventLogs, firstDay, lastDay);
+                await writer.WriteLineAsync(currentLine);
+            }
+        }
 
         await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
         DownloadingFile = false;
     }
 
+    private async Task ExportFileFromUrl() {
+        await ExportFile("{0}-{1}.csv", "first name, last name, total worked hours, minutes, seconds, vacations (days), sick leaves (days), unpaid (days), payed (days),", GetLineForSinglePerson);
+    }
+
     private async Task ExportWorkingDays() {
-        DownloadingFile = true;
-        var country = AllCountries.First(x => x.Id == SelectedCountryId);
-        
-        var request = Guid.NewGuid();
-        var fileName = string.Format("WorkingDays-{0}-{1}.csv", country.Name.Trim().Replace(" ", "_"), FirstDay.ToString("MMMM"));
-        var fileUrl = string.Format("/files/{0}", FormatRequest(request));
-
-        await AggregateDataWorkingDays(country, request);
-
-        await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
-        DownloadingFile = false;
+        await ExportFile("WorkingDays-{0}-{1}.csv","first name, last name, total working days, sick leave, paid leave, unpaid leave, vacations,", GetWorkingLineForPerson);
     }
 
     private string FormatRequest(Guid request) {
