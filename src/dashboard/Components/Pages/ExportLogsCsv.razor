@@ -195,41 +195,57 @@
 
                 var eventsForDay = logsForPerson.Where(x => firstDate <= x.Timestamp && x.Timestamp < next).ToList();
 
-                if (eventsForDay.Count == 1) {
-                    var onlyEvent = eventsForDay.First();
-                    switch (onlyEvent.LogType) {
-                        case LogType.SickLeave:
-                            sick += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (BO)");
-                            break;
-                        case LogType.PaidLeave:
-                            payed += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (PO)");
-                            break;
-                        case LogType.UnpaidLeave:
-                            unpaid += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (NPO)");
-                            break;
-                        case LogType.Vacation:
-                            vacations += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (GOD)");
-                            break;
-                    }
-                } else {
-                    var currForDay = new TimeSpan();
-                    for (int i = 0; i < eventsForDay.Count; i += 2) {
-                        var first = eventsForDay[i];
-                        if (eventsForDay.Count <= i + 1) {
-                            // Non checked out day, skipping
-                            continue;
-                        }
-                        var second = eventsForDay[i + 1];
-                        var curr = second.Timestamp.Subtract(first.Timestamp);
-                        currForDay = currForDay.Add(curr);
-                    }
+                if (eventsForDay.Count == 0) {
+                    sumForDay[DateOnly.FromDateTime(firstDate)] = "-";
+                    firstDate = next;
+                    continue;                    
+                }
 
-                    sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("{0}h {1}m {2}s", currForDay.Hours, currForDay.Minutes, currForDay.Seconds);
-                    total = total.Add(currForDay);
+                var firstEvent = eventsForDay.First();
+                switch (firstEvent .LogType) {
+                    case LogType.SickLeave:
+                        sick += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (BO)");
+                        break;
+                    case LogType.PaidLeave:
+                        payed += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (PO)");
+                        break;
+                    case LogType.UnpaidLeave:
+                        unpaid += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (NPO)");
+                        break;
+                    case LogType.Vacation:
+                        vacations += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("8h (GOD)");
+                        break;
+                    case LogType.CheckIn:
+                        var currForDay = new TimeSpan();
+                        var comments = new List<string>();
+                        for (int i = 0; i < eventsForDay.Count; i += 2) {
+                            var first = eventsForDay[i];
+                            if (eventsForDay.Count <= i + 1) {
+                                // Non checked out day, skipping
+                                comments.Add("Nije se odjavio za prijavu u " + first.Timestamp.ToLocalTime().ToString("HH:mm:ss"));
+                                continue;
+                            }
+                            var second = eventsForDay[i + 1];
+                            var curr = second.Timestamp.Subtract(first.Timestamp);
+                            currForDay = currForDay.Add(curr);
+                        }
+
+                        var formattedComment = string.Join(", ", comments);
+                        var comment = comments.Count == 0
+                            ? ""
+                            : "(" + formattedComment + ")";
+
+                        if (!string.IsNullOrEmpty(comment)){
+                            logger.LogInformation("Comment - " + comment);
+                        }
+
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("{0}h {1}m {2}s {3}", currForDay.Hours, currForDay.Minutes, currForDay.Seconds, comment);
+                        total = total.Add(currForDay);
+                        break;
                 }
                 firstDate = next;
             }
@@ -288,45 +304,50 @@
 
                 var eventsForDay = logsForPerson.Where(x => firstDate <= x.Timestamp && x.Timestamp < next).ToList();
 
-                if (eventsForDay.Count == 1) {
-                    var onlyEvent = eventsForDay.First();
-                    switch (onlyEvent.LogType) {
-                        case LogType.SickLeave:
-                            sick += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("BO");
-                            break;
-                        case LogType.PaidLeave:
-                            payed += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("PO");
-                            break;
-                        case LogType.UnpaidLeave:
-                            unpaid += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("NPO");
-                            break;
-                        case LogType.Vacation:
-                            vacations += 1;
-                            sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("GOD");
-                            break;
-                    }
-                } else {
-                    var currForDay = new TimeSpan();
-                    for (int i = 0; i < eventsForDay.Count; i += 2) {
-                        var first = eventsForDay[i];
-                        if (eventsForDay.Count <= i + 1) {
-                            // Non checked out day, skipping
-                            continue;
-                        }
-                        var second = eventsForDay[i + 1];
-                        var curr = second.Timestamp.Subtract(first.Timestamp);
-                        currForDay = currForDay.Add(curr);
-                    }
+                if (eventsForDay.Count == 0) {
+                    sumForDay[DateOnly.FromDateTime(firstDate)] = "-";
+                    firstDate = next;
+                    continue;                    
+                }
 
-                    if (currForDay > acceptedWorkingDay) {
-                        workingDays += 1;
-                    }
-                    sumForDay[DateOnly.FromDateTime(firstDate)] = currForDay != TimeSpan.Zero
-                        ? string.Format("{0}:{1}:{2}", currForDay.Hours, currForDay.Minutes, currForDay.Seconds)
-                        : "-";
+                var firstEvent = eventsForDay.First();
+                switch (firstEvent.LogType) {
+                    case LogType.SickLeave:
+                        sick += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("BO");
+                        break;
+                    case LogType.PaidLeave:
+                        payed += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("PO");
+                        break;
+                    case LogType.UnpaidLeave:
+                        unpaid += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("NPO");
+                        break;
+                    case LogType.Vacation:
+                        vacations += 1;
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = string.Format("GOD");
+                        break;
+                    case LogType.CheckIn:
+                        var currForDay = new TimeSpan();
+                        for (int i = 0; i < eventsForDay.Count; i += 2) {
+                            var first = eventsForDay[i];
+                            if (eventsForDay.Count <= i + 1) {
+                                // Non checked out day, skipping
+                                continue;
+                            }
+                            var second = eventsForDay[i + 1];
+                            var curr = second.Timestamp.Subtract(first.Timestamp);
+                            currForDay = currForDay.Add(curr);
+                        }
+
+                        if (currForDay > acceptedWorkingDay) {
+                            workingDays += 1;
+                        }
+                        sumForDay[DateOnly.FromDateTime(firstDate)] = currForDay != TimeSpan.Zero
+                            ? string.Format("{0}:{1}:{2}", currForDay.Hours, currForDay.Minutes, currForDay.Seconds)
+                            : "-";
+                        break;
                 }
                 firstDate = next;
             }

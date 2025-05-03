@@ -111,7 +111,7 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
     var random = new Random();
     while (beginning < ending)
     {
-        if (beginning.DayOfWeek == DayOfWeek.Sunday)
+        if (beginning.DayOfWeek == DayOfWeek.Sunday || beginning.DayOfWeek == DayOfWeek.Saturday)
         {
             beginning = beginning.AddDays(1);
             continue;
@@ -120,10 +120,10 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
         LogType logType;
         switch (random.NextDouble() * 100)
         {
-            case double n when n < 10:
+            case double n when n < 5:
                 logType = LogType.UnpaidLeave;
                 break;
-            case double n when n < 20:
+            case double n when n < 10:
                 logType = LogType.SickLeave;
                 break;
             case double n when n < 90:
@@ -158,6 +158,9 @@ async Task FillWithRandomLogs(ApplicationDbContext dbContext, ILogger logger, Pe
                     Timestamp = checkedOut.ToUniversalTime()
                 };
                 await dbContext.EventLogs.AddAsync(checkInLog);
+                if (beginning.DayOfWeek == DayOfWeek.Friday) {
+                    break;
+                }
                 await dbContext.EventLogs.AddAsync(checkOutLog);
                 break;
             case LogType.SickLeave:
